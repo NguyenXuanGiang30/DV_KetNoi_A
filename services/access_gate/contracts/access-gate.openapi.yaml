@@ -1,0 +1,223 @@
+openapi: 3.1.0
+info:
+  title: Smart Campus — Access Gate API
+  version: 1.0.0
+  description: |
+    API cho dịch vụ kiểm soát ra/vào.
+    - Cặp 3: Core Business gọi (GET /access/logs/recent, GET /gates/{id}/status, GET /cards/{id})
+    - Cặp 10: Access Gate gọi Core Business (POST /access/check) — consumer side
+servers:
+  - url: http://localhost:8003
+    description: Local dev
+  - url: http://access-gate:8000
+    description: Docker internal
+tags:
+  - name: access
+    description: Access logs & gate operations
+  - name: system
+    description: Health
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [system]
+      operationId: getHealth
+      security: []
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /access/logs/recent:
+    get:
+      tags: [access]
+      operationId: getRecentLogs
+      summary: Lấy log quẹt thẻ gần đây
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Danh sách log
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AccessLog"
+                  total:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /access/logs/{logId}:
+    get:
+      tags: [access]
+      operationId: getLogById
+      summary: Chi tiết một log
+      parameters:
+        - name: logId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Log detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccessLog"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /gates/{gateId}/status:
+    get:
+      tags: [access]
+      operationId: getGateStatus
+      summary: Trạng thái cổng
+      parameters:
+        - name: gateId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Gate status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GateStatus"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /cards/{cardUid}:
+    get:
+      tags: [access]
+      operationId: getCardInfo
+      summary: Tra cứu thẻ RFID
+      parameters:
+        - name: cardUid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Card info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CardInfo"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, service, version, time, mqtt_connected, message_count]
+      properties:
+        status:
+          type: string
+        service:
+          type: string
+        version:
+          type: string
+        time:
+          type: string
+        mqtt_connected:
+          type: boolean
+        message_count:
+          type: integer
+
+    AccessLog:
+      type: object
+      properties:
+        event_id:
+          type: string
+        uid:
+          type: string
+        student_id:
+          type: string
+        full_name:
+          type: string
+        door_id:
+          type: string
+        direction:
+          type: string
+        access_result:
+          type: string
+          enum: [granted, denied]
+        reason:
+          type: string
+        timestamp:
+          type: string
+
+    GateStatus:
+      type: object
+      properties:
+        gate_id:
+          type: string
+        location:
+          type: string
+        status:
+          type: string
+
+    CardInfo:
+      type: object
+      properties:
+        uid:
+          type: string
+        student_id:
+          type: string
+        full_name:
+          type: string
+        class_name:
+          type: string
+        registered:
+          type: boolean
+
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Thiếu token
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    NotFound:
+      description: Không tìm thấy
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
