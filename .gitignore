@@ -34,3 +34,6 @@ labs_reference/
 # Node
 node_modules/
 package-lock.json
+
+# Data files
+*.csv
