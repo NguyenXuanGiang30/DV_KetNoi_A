@@ -1,0 +1,105 @@
+openapi: 3.1.0
+info:
+  title: Smart Campus — IoT Ingestion API
+  version: 1.0.0
+  description: Dịch vụ tiếp nhận và chuẩn hóa dữ liệu cảm biến IoT.
+servers:
+  - url: http://localhost:8001
+tags:
+  - name: readings
+  - name: system
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [system]
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /api/v1/events/recent:
+    get:
+      tags: [readings]
+      operationId: getRecentEvents
+      summary: Lấy event đã xử lý gần đây
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProcessedEvent"
+                  total:
+                    type: integer
+
+  /api/v1/status:
+    get:
+      tags: [system]
+      operationId: getStatus
+      summary: Trạng thái chi tiết service
+      responses:
+        "200":
+          description: OK
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        service:
+          type: string
+        version:
+          type: string
+        time:
+          type: string
+        mqtt_connected:
+          type: boolean
+        message_count:
+          type: integer
+
+    ProcessedEvent:
+      type: object
+      properties:
+        event_id:
+          type: string
+        device_id:
+          type: string
+        temperature_c:
+          type: number
+        humidity_percent:
+          type: number
+        status:
+          type: string
+          enum: [normal, warning, danger, sensor_error, invalid_device]
+        alert_level:
+          type: string
+        reason:
+          type: string
+        timestamp:
+          type: string
