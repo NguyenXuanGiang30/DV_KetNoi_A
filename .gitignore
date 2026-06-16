@@ -1,0 +1,36 @@
+# Environment
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Docker
+docker-compose.override.yml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Reports (giữ thư mục nhưng không track file ảnh/video lớn)
+reports/*.mp4
+reports/*.avi
+
+# Labs reference (chỉ dùng tham khảo)
+labs_reference/
+
+# Node
+node_modules/
+package-lock.json

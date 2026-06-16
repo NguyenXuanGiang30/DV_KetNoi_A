@@ -1,0 +1,165 @@
+services:
+  # ──────────────────────────────────────────────
+  # A1: IoT Ingestion Service
+  # ──────────────────────────────────────────────
+  iot-ingestion:
+    build:
+      context: ./services/iot_ingestion
+      dockerfile: Dockerfile
+    container_name: smart-campus-iot-ingestion
+    env_file: .env
+    ports:
+      - "${IOT_INGESTION_PORT:-8001}:8000"
+    volumes:
+      - ./Datas:/app/data
+    networks:
+      - campus-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ──────────────────────────────────────────────
+  # A2: Camera Stream Service
+  # ──────────────────────────────────────────────
+  camera-stream:
+    build:
+      context: ./services/camera_stream
+      dockerfile: Dockerfile
+    container_name: smart-campus-camera-stream
+    env_file: .env
+    ports:
+      - "${CAMERA_STREAM_PORT:-8002}:8000"
+    depends_on:
+      ai-vision:
+        condition: service_healthy
+    networks:
+      - campus-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ──────────────────────────────────────────────
+  # A3: Access Gate Service
+  # ──────────────────────────────────────────────
+  access-gate:
+    build:
+      context: ./services/access_gate
+      dockerfile: Dockerfile
+    container_name: smart-campus-access-gate
+    env_file: .env
+    ports:
+      - "${ACCESS_GATE_PORT:-8003}:8000"
+    volumes:
+      - ./Datas:/app/data
+    networks:
+      - campus-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ──────────────────────────────────────────────
+  # A4: AI Vision Service
+  # ──────────────────────────────────────────────
+  ai-vision:
+    build:
+      context: ./services/ai_vision
+      dockerfile: Dockerfile
+    container_name: smart-campus-ai-vision
+    env_file: .env
+    ports:
+      - "${AI_VISION_PORT:-8004}:8000"
+    networks:
+      - campus-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ──────────────────────────────────────────────
+  # A5: Analytics Service
+  # ──────────────────────────────────────────────
+  analytics:
+    build:
+      context: ./services/analytics
+      dockerfile: Dockerfile
+    container_name: smart-campus-analytics
+    env_file: .env
+    ports:
+      - "${ANALYTICS_PORT:-8005}:8000"
+    networks:
+      - campus-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ──────────────────────────────────────────────
+  # A6: Core Business Service
+  # ──────────────────────────────────────────────
+  core-business:
+    build:
+      context: ./services/core_business
+      dockerfile: Dockerfile
+    container_name: smart-campus-core-business
+    env_file: .env
+    ports:
+      - "${CORE_BUSINESS_PORT:-8006}:8000"
+    depends_on:
+      ai-vision:
+        condition: service_healthy
+      access-gate:
+        condition: service_healthy
+      notification:
+        condition: service_healthy
+    networks:
+      - campus-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ──────────────────────────────────────────────
+  # A7: Notification Service
+  # ──────────────────────────────────────────────
+  notification:
+    build:
+      context: ./services/notification
+      dockerfile: Dockerfile
+    container_name: smart-campus-notification
+    env_file: .env
+    ports:
+      - "${NOTIFICATION_PORT:-8007}:8000"
+    networks:
+      - campus-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  campus-net:
+    driver: bridge
