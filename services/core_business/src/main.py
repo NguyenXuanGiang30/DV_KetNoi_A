@@ -21,10 +21,10 @@ SERVICE_VERSION = os.getenv("SERVICE_VERSION", "1.0.0")
 AUTH_TOKEN = os.getenv("AUTH_TOKEN", "smart-campus-dev-token-2026")
 
 # ── MQTT Config (dùng chung credential IoT để subscribe) ──
-MQTT_HOST = os.getenv("MQTT_BROKER_HOST", "f6f78e87db4a4c189dd3d706745a5e93.s1.eu.hivemq.cloud")
+MQTT_HOST = os.getenv("MQTT_BROKER_HOST", "")
 MQTT_PORT = int(os.getenv("MQTT_BROKER_PORT", "8883"))
-MQTT_USERNAME = os.getenv("MQTT_IOT_USERNAME", "DVKN_IOT_2026")
-MQTT_PASSWORD = os.getenv("MQTT_IOT_PASSWORD", "ThaiBao12A@")
+MQTT_USERNAME = os.getenv("MQTT_IOT_USERNAME", "")
+MQTT_PASSWORD = os.getenv("MQTT_IOT_PASSWORD", "")
 
 TOPIC_SENSOR = os.getenv("TOPIC_EVENTS_SENSOR", "smart-campus/events/sensor")
 TOPIC_ACCESS = os.getenv("TOPIC_EVENTS_ACCESS", "smart-campus/events/access")

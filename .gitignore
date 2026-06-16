@@ -35,5 +35,7 @@ labs_reference/
 node_modules/
 package-lock.json
 
-# Data files
-*.csv
+# Data and Document folders (contains credentials and whitelist)
+Datas/
+Docs/
+

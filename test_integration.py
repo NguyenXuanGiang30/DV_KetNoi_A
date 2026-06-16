@@ -1,31 +1,35 @@
+import os
 import httpx
 import json
 import time
 import ssl
 import sys
 from paho.mqtt import client as mqtt_client
+from dotenv import load_dotenv
+load_dotenv()
 
 # --- Configuration ---
-AUTH_TOKEN = "smart-campus-dev-token-2026"
+AUTH_TOKEN = os.getenv("AUTH_TOKEN", "smart-campus-dev-token-2026")
 HEADERS = {"Authorization": f"Bearer {AUTH_TOKEN}"}
 
 SERVICES = {
-    "A1: IoT Ingestion": "http://localhost:8001",
-    "A2: Camera Stream": "http://localhost:8002",
-    "A3: Access Gate": "http://localhost:8003",
-    "A4: AI Vision": "http://localhost:8004",
-    "A5: Analytics": "http://localhost:8005",
-    "A6: Core Business": "http://localhost:8006",
-    "A7: Notification": "http://localhost:8007",
+    "A1: IoT Ingestion": f"http://localhost:{os.getenv('IOT_INGESTION_PORT', '8001')}",
+    "A2: Camera Stream": f"http://localhost:{os.getenv('CAMERA_STREAM_PORT', '8002')}",
+    "A3: Access Gate": f"http://localhost:{os.getenv('ACCESS_GATE_PORT', '8003')}",
+    "A4: AI Vision": f"http://localhost:{os.getenv('AI_VISION_PORT', '8004')}",
+    "A5: Analytics": f"http://localhost:{os.getenv('ANALYTICS_PORT', '8005')}",
+    "A6: Core Business": f"http://localhost:{os.getenv('CORE_BUSINESS_PORT', '8006')}",
+    "A7: Notification": f"http://localhost:{os.getenv('NOTIFICATION_PORT', '8007')}",
 }
 
-MQTT_HOST = "f6f78e87db4a4c189dd3d706745a5e93.s1.eu.hivemq.cloud"
-MQTT_PORT = 8883
-MQTT_USER = "DVKN2026"
-MQTT_PASS = "ThaiBao12A@"
+MQTT_HOST = os.getenv("MQTT_BROKER_HOST", "")
+MQTT_PORT = int(os.getenv("MQTT_BROKER_PORT", "8883"))
+MQTT_USER = os.getenv("MQTT_GATE_USERNAME", "")
+MQTT_PASS = os.getenv("MQTT_GATE_PASSWORD", "")
 
-TOPIC_RAW_IOT = "smart-campus/raw/iot/environment"
-TOPIC_RAW_ACCESS = "smart-campus/raw/access/rfid-uid"
+TOPIC_RAW_IOT = os.getenv("TOPIC_RAW_IOT", "smart-campus/raw/iot/environment")
+TOPIC_RAW_ACCESS = os.getenv("TOPIC_RAW_ACCESS", "smart-campus/raw/access/rfid-uid")
+
 
 def print_header(title):
     print("\n" + "=" * 60)

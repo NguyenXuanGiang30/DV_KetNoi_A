@@ -23,10 +23,10 @@ SERVICE_VERSION = os.getenv("SERVICE_VERSION", "1.0.0")
 AUTH_TOKEN = os.getenv("AUTH_TOKEN", "smart-campus-dev-token-2026")
 
 # ── MQTT Config ──
-MQTT_HOST = os.getenv("MQTT_BROKER_HOST", "f6f78e87db4a4c189dd3d706745a5e93.s1.eu.hivemq.cloud")
+MQTT_HOST = os.getenv("MQTT_BROKER_HOST", "")
 MQTT_PORT = int(os.getenv("MQTT_BROKER_PORT", "8883"))
-MQTT_USERNAME = os.getenv("MQTT_GATE_USERNAME", "DVKN2026")
-MQTT_PASSWORD = os.getenv("MQTT_GATE_PASSWORD", "ThaiBao12A@")
+MQTT_USERNAME = os.getenv("MQTT_GATE_USERNAME", "")
+MQTT_PASSWORD = os.getenv("MQTT_GATE_PASSWORD", "")
 TOPIC_RAW = os.getenv("TOPIC_RAW_ACCESS", "smart-campus/raw/access/rfid-uid")
 TOPIC_EVENTS = os.getenv("TOPIC_EVENTS_ACCESS", "smart-campus/events/access")
 
