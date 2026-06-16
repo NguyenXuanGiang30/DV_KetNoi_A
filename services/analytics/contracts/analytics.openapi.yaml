@@ -1,0 +1,103 @@
+openapi: 3.1.0
+info:
+  title: Smart Campus — Analytics API
+  version: 1.0.0
+  description: Dịch vụ tổng hợp và phân tích dữ liệu từ tất cả service.
+servers:
+  - url: http://localhost:8005
+tags:
+  - name: metrics
+  - name: system
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [system]
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /api/v1/metrics:
+    get:
+      tags: [metrics]
+      operationId: getAllMetrics
+      summary: Dashboard KPI tổng hợp
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricsDashboard"
+
+  /api/v1/metrics/{metricName}:
+    get:
+      tags: [metrics]
+      operationId: getMetric
+      parameters:
+        - name: metricName
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Metric value
+        "404":
+          description: Metric not found
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        service:
+          type: string
+        version:
+          type: string
+        time:
+          type: string
+        mqtt_connected:
+          type: boolean
+        total_events:
+          type: integer
+
+    MetricsDashboard:
+      type: object
+      properties:
+        counters:
+          type: object
+          properties:
+            sensor_events:
+              type: integer
+            access_events:
+              type: integer
+            camera_events:
+              type: integer
+            core_alerts:
+              type: integer
+            access_granted:
+              type: integer
+            access_denied:
+              type: integer
+        avg_temperature_by_room:
+          type: object
+        avg_humidity_by_room:
+          type: object
+        access_deny_rate_percent:
+          type: number
