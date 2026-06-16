@@ -1,0 +1,266 @@
+openapi: 3.1.0
+info:
+  title: Smart Campus — AI Vision API
+  version: 1.0.0
+  description: |
+    Dịch vụ AI phân tích hình ảnh cho Smart Campus.
+    - Cặp 1: Camera Stream → AI Vision (POST /detect)
+    - Cặp 2: Core Business → AI Vision (POST /vision/face-match, GET /vision/detections/{id})
+  contact:
+    name: Group A4 - AI Vision
+servers:
+  - url: http://localhost:8004
+    description: Local dev
+  - url: http://ai-vision:8000
+    description: Docker internal
+tags:
+  - name: vision
+    description: Image detection & face matching
+  - name: system
+    description: Health and runtime info
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [system]
+      operationId: getHealth
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /detect:
+    post:
+      tags: [vision]
+      operationId: detectImage
+      summary: Phát hiện vật thể trong ảnh
+      description: Camera Stream gọi endpoint này khi phát hiện motion.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DetectionRequest"
+      responses:
+        "200":
+          description: Kết quả nhận diện
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetectionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /vision/face-match:
+    post:
+      tags: [vision]
+      operationId: faceMatch
+      summary: Đối chiếu khuôn mặt
+      description: Core Business gọi để face-match.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FaceMatchRequest"
+      responses:
+        "200":
+          description: Kết quả đối chiếu
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FaceMatchResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /vision/detections/{detectionId}:
+    get:
+      tags: [vision]
+      operationId: getDetection
+      summary: Lấy chi tiết detection
+      parameters:
+        - name: detectionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Detection detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetectionResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /vision/models/info:
+    get:
+      tags: [vision]
+      operationId: getModelInfo
+      summary: Thông tin model AI
+      responses:
+        "200":
+          description: Model info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelInfo"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, service, version, time]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        service:
+          type: string
+        version:
+          type: string
+        time:
+          type: string
+          format: date-time
+
+    DetectionRequest:
+      type: object
+      required: [camera_id]
+      properties:
+        camera_id:
+          type: string
+          minLength: 3
+        image_url:
+          type: string
+          format: uri
+        image_base64:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        motion_score:
+          type: number
+
+    DetectionResponse:
+      type: object
+      required: [detection_id, camera_id, timestamp, detections, unknown_person, risk_level]
+      properties:
+        detection_id:
+          type: string
+        camera_id:
+          type: string
+        timestamp:
+          type: string
+        detections:
+          type: array
+          items:
+            $ref: "#/components/schemas/DetectionItem"
+        unknown_person:
+          type: boolean
+        risk_level:
+          type: string
+          enum: [low, medium, high]
+
+    DetectionItem:
+      type: object
+      properties:
+        label:
+          type: string
+          enum: [person, vehicle, unknown]
+        confidence:
+          type: number
+        bbox:
+          type: object
+
+    FaceMatchRequest:
+      type: object
+      required: [camera_id]
+      properties:
+        camera_id:
+          type: string
+        image_url:
+          type: string
+        image_base64:
+          type: string
+        reference_face_id:
+          type: string
+
+    FaceMatchResponse:
+      type: object
+      required: [match_id, camera_id, matched, confidence, model_version, timestamp]
+      properties:
+        match_id:
+          type: string
+        camera_id:
+          type: string
+        matched:
+          type: boolean
+        confidence:
+          type: number
+        model_version:
+          type: string
+        timestamp:
+          type: string
+
+    ModelInfo:
+      type: object
+      properties:
+        model_name:
+          type: string
+        model_version:
+          type: string
+        supported_labels:
+          type: array
+          items:
+            type: string
+        max_image_size_mb:
+          type: integer
+
+    ProblemDetails:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Request không hợp lệ
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    Unauthorized:
+      description: Thiếu hoặc sai token
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    NotFound:
+      description: Không tìm thấy
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
