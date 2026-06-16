@@ -1,0 +1,200 @@
+openapi: 3.1.0
+info:
+  title: Smart Campus — Core Business API
+  version: 1.0.0
+  description: |
+    API trung tâm nghiệp vụ Smart Campus.
+    - Cặp 10: Cung cấp POST /access/check cho Access Gate
+    - Cặp 2: Gọi AI Vision (consumer)
+    - Cặp 3: Gọi Access Gate (consumer)
+    - Cặp 4: Gửi alert cho Notification
+servers:
+  - url: http://localhost:8006
+    description: Local dev
+  - url: http://core-business:8000
+    description: Docker internal
+tags:
+  - name: policy
+    description: Access policy check
+  - name: alerts
+    description: Alert management
+  - name: system
+    description: Health
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [system]
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /access/check:
+    post:
+      tags: [policy]
+      operationId: checkAccessPolicy
+      summary: Kiểm tra policy ra/vào (cho Access Gate gọi)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccessCheckRequest"
+      responses:
+        "200":
+          description: Kết quả kiểm tra policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccessCheckResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/alerts/recent:
+    get:
+      tags: [alerts]
+      operationId: getRecentAlerts
+      summary: Lấy cảnh báo gần đây
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Danh sách alerts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Alert"
+                  total:
+                    type: integer
+
+  /api/v1/alerts/{alertId}:
+    get:
+      tags: [alerts]
+      operationId: getAlertById
+      parameters:
+        - name: alertId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Alert detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Alert"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        service:
+          type: string
+        version:
+          type: string
+        time:
+          type: string
+        mqtt_connected:
+          type: boolean
+        alerts_count:
+          type: integer
+
+    AccessCheckRequest:
+      type: object
+      required: [uid, door_id, direction]
+      properties:
+        uid:
+          type: string
+        door_id:
+          type: string
+        direction:
+          type: string
+
+    AccessCheckResponse:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: [ALLOW, DENY]
+        reason_code:
+          type: string
+        policy_id:
+          type: string
+
+    Alert:
+      type: object
+      properties:
+        id:
+          type: string
+        source_service:
+          type: string
+        alert_type:
+          type: string
+        severity:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        message:
+          type: string
+        related_event_id:
+          type: string
+        status:
+          type: string
+          enum: [OPEN, ACKNOWLEDGED, RESOLVED]
+        created_at:
+          type: string
+        resolved_at:
+          type: string
+
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Thiếu token
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    NotFound:
+      description: Không tìm thấy
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
