@@ -33,9 +33,6 @@ services:
     env_file: .env
     ports:
       - "${CAMERA_STREAM_PORT:-8002}:8000"
-    depends_on:
-      ai-vision:
-        condition: service_healthy
     networks:
       - campus-net
     restart: unless-stopped
@@ -122,13 +119,6 @@ services:
     env_file: .env
     ports:
       - "${CORE_BUSINESS_PORT:-8006}:8000"
-    depends_on:
-      ai-vision:
-        condition: service_healthy
-      access-gate:
-        condition: service_healthy
-      notification:
-        condition: service_healthy
     networks:
       - campus-net
     restart: unless-stopped
