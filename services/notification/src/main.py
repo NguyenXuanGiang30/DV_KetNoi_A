@@ -5,8 +5,14 @@ Nhận yêu cầu cảnh báo từ Core Business (cặp 4) và giả lập gửi
 
 import os
 import uuid
+import urllib.request
+import urllib.parse
+import json
+import smtplib
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from pydantic import BaseModel, Field
@@ -14,6 +20,110 @@ from pydantic import BaseModel, Field
 SERVICE_NAME = os.getenv("SERVICE_NAME", "notification")
 SERVICE_VERSION = os.getenv("SERVICE_VERSION", "1.0.0")
 AUTH_TOKEN = os.getenv("AUTH_TOKEN", "smart-campus-dev-token-2026")
+
+def send_telegram_alert(message: str, severity: str, alert_type: str) -> bool:
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        print(f"[{SERVICE_NAME}] ⚠️ Telegram variables not set. Skipping Telegram notification.")
+        return False
+    
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    formatted_msg = (
+        f"🚨 *Smart Campus Alert* 🚨\n\n"
+        f"🔹 *Type:* `{alert_type}`\n"
+        f"🔹 *Severity:* `{severity}`\n"
+        f"🔹 *Message:* {message}\n"
+        f"🔹 *Time:* `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+    )
+    
+    payload = {
+        "chat_id": chat_id,
+        "text": formatted_msg,
+        "parse_mode": "Markdown"
+    }
+    
+    try:
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            url, 
+            data=data, 
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=5) as response:
+            res = response.read().decode("utf-8")
+            print(f"[{SERVICE_NAME}] ✅ Telegram alert sent: {res[:50]}...")
+            return True
+    except Exception as e:
+        print(f"[{SERVICE_NAME}] ❌ Failed to send Telegram alert: {e}")
+        return False
+
+def send_email_alert(message: str, severity: str, alert_type: str) -> bool:
+    host = os.getenv("SMTP_HOST")
+    port_str = os.getenv("SMTP_PORT", "587")
+    user = os.getenv("SMTP_USER")
+    password = os.getenv("SMTP_PASSWORD")
+    receiver = os.getenv("SMTP_RECEIVER")
+    
+    if not all([host, user, password, receiver]):
+        print(f"[{SERVICE_NAME}] ⚠️ SMTP credentials not fully set. Skipping Email notification.")
+        return False
+        
+    try:
+        port = int(port_str)
+        
+        # Build email message
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"🚨 [Smart Campus] {severity} Alert: {alert_type}"
+        msg["From"] = user
+        msg["To"] = receiver
+        
+        text = f"Smart Campus Alert\n\nSeverity: {severity}\nType: {alert_type}\nMessage: {message}\nTime: {datetime.now().isoformat()}"
+        html = f"""\
+        <html>
+          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 15px; margin-bottom: 20px;">
+              <h2 style="color: #721c24; margin-top: 0;">🚨 Smart Campus Alert 🚨</h2>
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td style="padding: 5px; font-weight: bold; width: 120px;">Alert Type:</td>
+                  <td style="padding: 5px; color: #721c24;">{alert_type}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 5px; font-weight: bold;">Severity:</td>
+                  <td style="padding: 5px;"><span style="background-color: #dc3545; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; font-weight: bold;">{severity}</span></td>
+                </tr>
+                <tr>
+                  <td style="padding: 5px; font-weight: bold;">Message:</td>
+                  <td style="padding: 5px;">{message}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 5px; font-weight: bold;">Timestamp:</td>
+                  <td style="padding: 5px;">{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</td>
+                </tr>
+              </table>
+            </div>
+            <p style="font-size: 0.8em; color: #666;">This is an automated notification from your Smart Campus system.</p>
+          </body>
+        </html>
+        """
+        
+        msg.attach(MIMEText(text, "plain"))
+        msg.attach(MIMEText(html, "html"))
+        
+        # Connect and send
+        server = smtplib.SMTP(host, port, timeout=5)
+        server.starttls()
+        server.login(user, password)
+        server.sendmail(user, receiver, msg.as_string())
+        server.quit()
+        print(f"[{SERVICE_NAME}] ✅ Email alert sent successfully to {receiver}")
+        return True
+    except Exception as e:
+        print(f"[{SERVICE_NAME}] ❌ Failed to send Email alert: {e}")
+        return False
+
 
 app = FastAPI(
     title="Smart Campus — Notification Service",
@@ -105,9 +215,13 @@ def create_notification(req: NotificationRequest):
     channels = req.channels or ["console"]
     created_at = now_iso()
 
-    # Giả lập gửi thông báo qua các kênh
+    # Gửi thông báo qua các kênh
     for channel in channels:
         print(f"[{SERVICE_NAME}] 📢 [{channel.upper()}] [{req.severity}] {req.alert_type}: {req.message}")
+        if channel.lower() == "telegram":
+            send_telegram_alert(req.message, req.severity, req.alert_type)
+        elif channel.lower() == "email":
+            send_email_alert(req.message, req.severity, req.alert_type)
 
     item = {
         "notification_id": notification_id,
