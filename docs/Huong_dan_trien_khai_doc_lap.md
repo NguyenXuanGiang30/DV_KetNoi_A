@@ -75,50 +75,168 @@ Tường lửa Windows mặc định sẽ chặn các máy khác gọi API vào 
    * Để đổi IP của dịch vụ đối tác mà bạn cần gọi, hãy chọn số tương ứng (1-7), sau đó nhập địa chỉ IP Radmin của đối tác đó.
    * Chọn số **`8`** để lưu cấu hình và thoát.
 
-### Bước 4: Khởi chạy dịch vụ của riêng nhóm mình
-Đảm bảo phần mềm **Docker Desktop** đã được mở và đang chạy ngầm trên máy của bạn.
-Chọn lệnh tương ứng với nhóm của bạn và gõ vào Terminal để chạy:
+### Bước 4: Hướng dẫn chi tiết riêng cho TỪNG MÁY / TỪNG NHÓM
 
-| Nhóm | Tên Dịch Vụ | Cổng REST | Lệnh Chạy Qua Docker |
-|---|---|---|---|
-| **A1** | IoT Ingestion | `8001` | `docker compose up -d --build iot-ingestion` |
-| **A2** | Camera Stream | `8002` | `docker compose up -d --build camera-stream` |
-| **A3** | Access Gate | `8003` | `docker compose up -d --build access-gate` |
-| **A4** | AI Vision | `8004` | `docker compose up -d --build ai-vision` |
-| **A5** | Analytics | `8005` | `docker compose up -d --build analytics` |
-| **A6** | Core Business | `8006` | `docker compose up -d --build core-business` |
-| **A7** | Notification | `8007` | `docker compose up -d --build notification` |
-
-*(Tham số `-d` giúp container chạy ngầm dưới nền).*
-
-> [!TIP]
-> **Đối với Nhóm A2 (Camera Stream):** Do container Docker không thể trực tiếp truy cập Webcam vật lý của Laptop nếu không cấu hình thêm driver phức tạp, khuyến nghị nhóm A2 chạy trực tiếp bằng Python trên máy Host:
-> 1. Mở PowerShell trong thư mục dự án và chạy:
->    ```bash
->    pip install -r services/camera_stream/requirements.txt
->    python services/camera_stream/src/main.py
->    ```
+Mỗi nhóm hãy tìm đến đúng mục của nhóm mình dưới đây để cấu hình và chạy:
 
 ---
 
-## PHẦN 3: KIỂM TRA & GIÁM SÁT DỊCH VỤ
+### MÁY NHÓM A1: IoT Ingestion (Cổng 8001)
+* **Nhiệm vụ:** Nhận dữ liệu nhiệt độ, độ ẩm, CO2 từ các cảm biến IoT và đẩy lên cơ sở dữ liệu/Hệ thống trung tâm.
+* **Các bước thực hiện trên Máy A1:**
+  1. Tạo file `.env` và điền thông tin MQTT Broker của HiveMQ Cloud.
+  2. Bật ứng dụng **Docker Desktop**.
+  3. Mở Terminal tại thư mục gốc của dự án và chạy duy nhất container của nhóm A1:
+     ```bash
+     docker compose up -d --build iot-ingestion
+     ```
+  4. **Cách kiểm tra logs (Xem dữ liệu chạy):**
+     ```bash
+     docker compose logs -f iot-ingestion
+     ```
+  5. **Xác nhận hoạt động:** Mở trình duyệt web hoặc PowerShell trên máy bất kỳ và gọi:
+     ```bash
+     curl http://<IP_RADMIN_MÁY_A1>:8001/health
+     ```
+     *(Phải trả về JSON chứa `"status": "healthy"` hoặc `"status": "ok"`).*
 
-### 1. Xem nhật ký hoạt động (Logs) của Container
-Để biết dịch vụ có bị lỗi gì không hoặc xem dữ liệu đang được truyền nhận như thế nào:
-```bash
-# Định dạng: docker compose logs -f <tên-dịch-vụ>
-# Ví dụ nhóm A3 muốn xem log của Access Gate:
-docker compose logs -f access-gate
-```
-*(Nhấn `Ctrl + C` để thoát màn hình xem log).*
+---
 
-### 2. Kiểm tra Healthcheck dịch vụ của đối tác
-Khi các nhóm đã chạy thành công, hãy kiểm tra xem mạng LAN Radmin có kết nối thông suốt chưa bằng cách gọi API Healthcheck:
-```bash
-# Mở PowerShell/CMD và gõ (thay IP đối tác):
-curl http://<IP_RADMIN_ĐỐI_TÁC>:<CỔNG_DỊCH_VỤ>/health
+### MÁY NHÓM A2: Camera Stream (Cổng 8002)
+* **Nhiệm vụ:** Stream hình ảnh từ Webcam/Camera, gửi ảnh đến AI Vision (A4) để nhận diện khuôn mặt và phát hiện hành vi.
+* **Các bước thực hiện trên Máy A2:**
+  1. Hỏi nhóm A4 địa chỉ IP Radmin của máy họ (ví dụ: `26.111.222.33`).
+  2. Chạy `python scratch/configure_lan.py`, chọn dịch vụ số **`4` (AI_VISION_URL)** và nhập IP Radmin của máy A4 vừa lấy.
+  3. **Cách chạy khuyến nghị (Chạy trực tiếp trên Host để bắt được Camera/Webcam):**
+     * Cài đặt thư viện Python:
+       ```bash
+       pip install -r services/camera_stream/requirements.txt
+       ```
+     * Khởi chạy code Camera:
+       ```bash
+       python services/camera_stream/src/main.py
+       ```
+  4. **Cách chạy qua Docker (Chỉ dùng nếu stream từ link video tĩnh/không dùng Webcam):**
+     ```bash
+     docker compose up -d --build camera-stream
+     ```
+  5. **Xác nhận hoạt động:** Từ máy bất kỳ gọi:
+     ```bash
+     curl http://<IP_RADMIN_MÁY_A2>:8002/health
+     ```
 
-# Ví dụ kiểm tra xem máy của nhóm A4 (AI Vision) có nhận được kết nối từ bạn không:
-curl http://26.115.42.99:8004/health
-```
-Nếu màn hình trả về kết quả dạng: `{"status":"ok", ...}` hoặc `{"status":"healthy", ...}` thì chúc mừng, kết nối giữa hai máy đã hoàn tất thành công!
+---
+
+### MÁY NHÓM A3: Access Gate (Cổng 8003)
+* **Nhiệm vụ:** Kiểm soát cửa ra vào bằng thẻ RFID/Mã số. Gửi yêu cầu check thẻ sang Core Business (A6) để quyết định đóng/mở cửa.
+* **Các bước thực hiện trên Máy A3:**
+  1. Hỏi nhóm A6 địa chỉ IP Radmin của máy họ (ví dụ: `26.111.222.44`).
+  2. Chạy `python scratch/configure_lan.py`, chọn dịch vụ số **`6` (CORE_BUSINESS_URL)** và nhập IP Radmin của máy A6.
+  3. Bật ứng dụng **Docker Desktop**.
+  4. Khởi chạy duy nhất container của nhóm A3:
+     ```bash
+     docker compose up -d --build access-gate
+     ```
+  5. **Cách kiểm tra logs (Xem quẹt thẻ thành công/thất bại):**
+     ```bash
+     docker compose logs -f access-gate
+     ```
+  6. **Xác nhận hoạt động:** Từ máy bất kỳ gọi:
+     ```bash
+     curl http://<IP_RADMIN_MÁY_A3>:8003/health
+     ```
+
+---
+
+### MÁY NHÓM A4: AI Vision (Cổng 8004)
+* **Nhiệm vụ:** Cung cấp API nhận diện khuôn mặt và phát hiện vật thể/con người (yolo) cho nhóm A2 và A6 gọi tới.
+* **Các bước thực hiện trên Máy A4:**
+  1. Lấy IP Radmin của máy mình (Ví dụ: `26.111.222.33`) gửi cho nhóm A2 và A6.
+  2. Bật ứng dụng **Docker Desktop**.
+  3. Khởi chạy duy nhất container của nhóm A4:
+     ```bash
+     docker compose up -d --build ai-vision
+     ```
+  4. **Cách kiểm tra logs:**
+     ```bash
+     docker compose logs -f ai-vision
+     ```
+  5. **Xác nhận hoạt động:** Từ máy bất kỳ gọi:
+     ```bash
+     curl http://<IP_RADMIN_MÁY_A4>:8004/health
+     ```
+
+---
+
+### MÁY NHÓM A5: Analytics (Cổng 8005)
+* **Nhiệm vụ:** Tổng hợp dữ liệu cảm biến, lượt ra vào cửa, số lượng người phát hiện được để vẽ biểu đồ Dashboard.
+* **Các bước thực hiện trên Máy A5:**
+  1. Tạo file `.env` và điền thông tin MQTT Broker của HiveMQ Cloud.
+  2. Bật ứng dụng **Docker Desktop**.
+  3. Khởi chạy duy nhất container của nhóm A5:
+     ```bash
+     docker compose up -d --build analytics
+     ```
+  4. **Cách kiểm tra logs:**
+     ```bash
+     docker compose logs -f analytics
+     ```
+  5. **Xác nhận hoạt động:** Từ máy bất kỳ gọi:
+     ```bash
+     curl http://<IP_RADMIN_MÁY_A5>:8005/health
+     ```
+
+---
+
+### MÁY NHÓM A6: Core Business (Cổng 8006)
+* **Nhiệm vụ:** Bộ não trung tâm. Khi A3 gửi yêu cầu quẹt thẻ, A6 sẽ gọi sang A4 (AI Vision) khớp khuôn mặt và gọi A3 (Access Gate) lấy log cũ để ra quyết định đóng/mở cửa.
+* **Các bước thực hiện trên Máy A6:**
+  1. Hỏi nhóm A3 và nhóm A4 địa chỉ IP Radmin của họ.
+  2. Chạy `python scratch/configure_lan.py`:
+     * Chọn dịch vụ số **`3` (ACCESS_GATE_URL)** và nhập IP Radmin của máy A3.
+     * Chọn dịch vụ số **`4` (AI_VISION_URL)** và nhập IP Radmin của máy A4.
+  3. Bật ứng dụng **Docker Desktop**.
+  4. Khởi chạy duy nhất container của nhóm A6:
+     ```bash
+     docker compose up -d --build core-business
+     ```
+  5. **Cách kiểm tra logs (Xem luồng xử lý nghiệp vụ):**
+     ```bash
+     docker compose logs -f core-business
+     ```
+  6. **Xác nhận hoạt động:** Từ máy bất kỳ gọi:
+     ```bash
+     curl http://<IP_RADMIN_MÁY_A6>:8006/health
+     ```
+
+---
+
+### MÁY NHÓM A7: Notification (Cổng 8007)
+* **Nhiệm vụ:** Nhận tin nhắn cảnh báo từ MQTT và thực hiện gửi thông báo thật qua Telegram Bot hoặc SMTP Email.
+* **Các bước thực hiện trên Máy A7:**
+  1. Mở file `.env` và cấu hình các thông số thật cho Telegram (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`) hoặc Email (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_RECEIVER`).
+  2. Bật ứng dụng **Docker Desktop**.
+  3. Khởi chạy duy nhất container của nhóm A7:
+     ```bash
+     docker compose up -d --build notification
+     ```
+  4. **Cách kiểm tra logs (Xem tin nhắn đã gửi đi chưa):**
+     ```bash
+     docker compose logs -f notification
+     ```
+  5. **Xác nhận hoạt động:** Từ máy bất kỳ gọi:
+     ```bash
+     curl http://<IP_RADMIN_MÁY_A7>:8007/health
+     ```
+
+---
+
+## PHẦN 4: HƯỚNG DẪN XỬ LÝ LỖI NHANH (TROUBLESHOOTING)
+
+*   **Lỗi: `Connection Refused` hoặc không gọi được sang máy đối tác:**
+    *   *Khắc phục:* Kiểm tra xem đối tác đã bật Radmin VPN chưa, đã chạy file `setup_firewall.bat` để mở tường lửa chưa. Cả hai máy phải PING được IP Radmin của nhau mới kết nối được.
+*   **Lỗi: `docker: command not found`:**
+    *   *Khắc phục:* Bạn chưa cài Docker Desktop hoặc chưa thêm Docker vào biến môi trường PATH. Khởi động lại máy hoặc cài đặt lại theo Phần 1.
+*   **Lỗi: `Port already in use`:**
+    *   *Khắc phục:* Cổng dịch vụ đang bị chiếm dụng bởi một tiến trình khác trên máy bạn. Hãy tắt tiến trình đó đi hoặc restart máy tính để giải phóng cổng.
+
