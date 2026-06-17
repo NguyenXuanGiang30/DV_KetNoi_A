@@ -13,6 +13,9 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PATH="/opt/venv/bin:$PATH"
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
 RUN addgroup --system appgroup \
     && adduser --system --ingroup appgroup --home /app appuser
 COPY --from=builder /opt/venv /opt/venv
