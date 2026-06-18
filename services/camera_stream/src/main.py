@@ -5,11 +5,14 @@ publish kết quả lên MQTT.
 """
 
 import base64
+import cv2
 import json
+import numpy as np
 import os
 import ssl
 import threading
 import time
+import urllib.request
 import uuid
 from datetime import datetime, timezone
 from io import BytesIO
@@ -39,9 +42,9 @@ MQTT_PASSWORD = os.getenv("MQTT_IOT_PASSWORD", "")
 TOPIC_CAMERA = os.getenv("TOPIC_EVENTS_CAMERA", "smart-campus/events/camera")
 
 # ── Motion detection config ──
-MOTION_THRESHOLD = float(os.getenv("MOTION_THRESHOLD", "0.50"))
+MOTION_THRESHOLD = float(os.getenv("MOTION_THRESHOLD", "0.05")) # Ngưỡng nhạy hơn cho pixel thay đổi (5%)
 COOLDOWN_SECONDS = int(os.getenv("COOLDOWN_SECONDS", "10"))
-FRAME_INTERVAL = int(os.getenv("FRAME_INTERVAL", "2"))  # Lấy 1 frame mỗi N giây
+FRAME_INTERVAL = int(os.getenv("FRAME_INTERVAL", "2"))  # Lấy 1 frame mỗi N giây khi ở chế độ fallback
 
 app = FastAPI(
     title="Smart Campus — Camera Stream Service",
@@ -80,28 +83,42 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-# ── Motion Detection (Simplified — không cần OpenCV) ──
-def simulate_motion_detection() -> tuple:
-    """
-    Giả lập phát hiện chuyển động.
-    Trong production, sử dụng OpenCV frame difference.
-    """
-    import random
-    motion_detected = random.random() > 0.6  # 40% có motion
-    motion_score = round(random.uniform(0.3, 0.95), 2) if motion_detected else round(random.uniform(0.0, 0.3), 2)
-    return motion_detected, motion_score
+def detect_motion(prev_frame, curr_frame) -> tuple:
+    """Tính toán sự thay đổi giữa 2 frame để phát hiện chuyển động."""
+    prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
+    prev_gray = cv2.GaussianBlur(prev_gray, (21, 21), 0)
+    
+    curr_gray = cv2.cvtColor(curr_frame, cv2.COLOR_BGR2GRAY)
+    curr_gray = cv2.GaussianBlur(curr_gray, (21, 21), 0)
+    
+    # Tính độ lệch tuyệt đối
+    diff = cv2.absdiff(prev_gray, curr_gray)
+    thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)[1]
+    thresh = cv2.dilate(thresh, None, iterations=2)
+    
+    # Tính tỷ lệ pixel thay đổi
+    non_zero = np.count_nonzero(thresh)
+    total_pixels = thresh.shape[0] * thresh.shape[1]
+    motion_score = round(non_zero / total_pixels, 2)
+    
+    return motion_score >= MOTION_THRESHOLD, motion_score
 
 
-def call_ai_vision(motion_score: float) -> Optional[dict]:
-    """Gọi AI Vision để phát hiện vật thể (cặp 1)."""
+def call_ai_vision(frame: np.ndarray, motion_score: float) -> Optional[dict]:
+    """Gọi AI Vision để phát hiện vật thể qua Base64 (cặp 1)."""
     try:
         CAMERA_STATUS["ai_calls"] += 1
-        with httpx.Client(timeout=5.0) as client:
+        
+        # Encode frame sang JPG
+        _, buffer = cv2.imencode('.jpg', frame)
+        img_base64 = base64.b64encode(buffer).decode('utf-8')
+        
+        with httpx.Client(timeout=10.0) as client:
             resp = client.post(
                 f"{AI_VISION_URL}/detect",
                 json={
                     "camera_id": CAMERA_ID,
-                    "image_url": f"http://{SERVICE_NAME}/snapshots/{CAMERA_ID}/{int(time.time())}.jpg",
+                    "image_base64": img_base64,
                     "timestamp": now_iso(),
                     "motion_score": motion_score,
                 },
@@ -156,9 +173,40 @@ def publish_camera_event(detection_result: Optional[dict], motion_score: float):
             print(f"[{SERVICE_NAME}] ⚠️ MQTT publish failed: {e}")
 
 
+def fallback_camera_loop():
+    """Vòng lặp giả lập dự phòng nếu không mở được webcam/IP camera."""
+    import random
+    last_trigger = 0
+    while True:
+        try:
+            time.sleep(FRAME_INTERVAL)
+            CAMERA_STATUS["frames_captured"] += 1
+            motion_detected = random.random() > 0.6
+            motion_score = round(random.uniform(0.3, 0.95), 2) if motion_detected else round(random.uniform(0.0, 0.3), 2)
+
+            if motion_detected and motion_score >= 0.50:
+                now = time.time()
+                if now - last_trigger >= COOLDOWN_SECONDS:
+                    last_trigger = now
+                    CAMERA_STATUS["motion_triggers"] += 1
+                    CAMERA_STATUS["last_motion"] = now_iso()
+                    print(f"[{SERVICE_NAME}] 🏃 (Fallback) Motion detected! Score: {motion_score}")
+                    
+                    # Tạo ảnh đen giả lập khi fallback
+                    dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                    cv2.putText(dummy_frame, "FALLBACK MOCK CAMERA", (100, 240),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                    
+                    result = call_ai_vision(dummy_frame, motion_score)
+                    publish_camera_event(result, motion_score)
+        except Exception as e:
+            print(f"[{SERVICE_NAME}] ❌ Fallback loop error: {e}")
+            time.sleep(5)
+
+
 # ── Camera Processing Loop ──
 def camera_processing_loop():
-    """Main loop: đọc frame, phát hiện motion, gọi AI Vision."""
+    """Main loop: đọc frame thật từ CAMERA_URL, phát hiện motion, gọi AI Vision."""
     global mqtt_client_ref
     last_trigger = 0
 
@@ -175,31 +223,139 @@ def camera_processing_loop():
     except Exception as e:
         print(f"[{SERVICE_NAME}] ⚠️ MQTT connection failed: {e}")
 
-    CAMERA_STATUS["stream_connected"] = True
-    print(f"[{SERVICE_NAME}] 📹 Camera processing loop started (simulated)")
+    # Nhận diện nguồn camera (Nếu cấu hình là số nguyên 0, 1... thì dùng webcam)
+    cam_source = CAMERA_URL
+    try:
+        if CAMERA_URL.isdigit():
+            cam_source = int(CAMERA_URL)
+    except Exception:
+        pass
 
-    while True:
+    print(f"[{SERVICE_NAME}] 📹 Connecting to camera source: {cam_source}")
+    
+    is_mjpeg_http = isinstance(cam_source, str) and (cam_source.startswith("http://") or cam_source.startswith("https://"))
+    
+    # Thử mở bằng VideoCapture trước
+    cap = cv2.VideoCapture(cam_source)
+    use_cv2_cap = cap.isOpened()
+
+    if use_cv2_cap:
+        CAMERA_STATUS["stream_connected"] = True
+        print(f"[{SERVICE_NAME}] 📹 Camera stream connected via OpenCV VideoCapture!")
+    elif is_mjpeg_http:
+        print(f"[{SERVICE_NAME}] ⚠️ VideoCapture failed. Using custom HTTPS MJPEG reader...")
+        CAMERA_STATUS["stream_connected"] = True
+    else:
+        CAMERA_STATUS["stream_connected"] = False
+        print(f"[{SERVICE_NAME}] ❌ Failed to open camera. Fallback to mock loop.")
+        fallback_camera_loop()
+        return
+
+    prev_frame = None
+
+    if not use_cv2_cap and is_mjpeg_http:
+        # Bộ đọc MJPEG stream bằng HTTPS thô
         try:
-            time.sleep(FRAME_INTERVAL)
-            CAMERA_STATUS["frames_captured"] += 1
-
-            motion_detected, motion_score = simulate_motion_detection()
-
-            if motion_detected and motion_score >= MOTION_THRESHOLD:
-                now = time.time()
-                if now - last_trigger >= COOLDOWN_SECONDS:
-                    last_trigger = now
-                    CAMERA_STATUS["motion_triggers"] += 1
-                    CAMERA_STATUS["last_motion"] = now_iso()
-
-                    print(f"[{SERVICE_NAME}] 🏃 Motion detected! Score: {motion_score}")
-
-                    # Gọi AI Vision
-                    result = call_ai_vision(motion_score)
-                    publish_camera_event(result, motion_score)
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            stream = urllib.request.urlopen(cam_source, context=ctx, timeout=15)
+            bytes_buffer = b""
+            print(f"[{SERVICE_NAME}] 📹 Custom HTTPS MJPEG Stream connected successfully!")
         except Exception as e:
-            print(f"[{SERVICE_NAME}] ❌ Loop error: {e}")
-            time.sleep(5)
+            print(f"[{SERVICE_NAME}] ❌ Failed to connect custom MJPEG stream: {e}")
+            CAMERA_STATUS["stream_connected"] = False
+            fallback_camera_loop()
+            return
+
+        while True:
+            try:
+                chunk = stream.read(8192)
+                if not chunk:
+                    print(f"[{SERVICE_NAME}] ⚠️ Stream ended. Reconnecting...")
+                    time.sleep(2)
+                    stream = urllib.request.urlopen(cam_source, context=ctx, timeout=15)
+                    bytes_buffer = b""
+                    continue
+
+                bytes_buffer += chunk
+                a = bytes_buffer.find(b'\xff\xd8') # Start of JPEG marker
+                b = bytes_buffer.find(b'\xff\xd9') # End of JPEG marker
+                if a != -1 and b != -1:
+                    jpg_bytes = bytes_buffer[a:b+2]
+                    bytes_buffer = bytes_buffer[b+2:]
+                    frame = cv2.imdecode(np.frombuffer(jpg_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+                    if frame is None:
+                        continue
+
+                    CAMERA_STATUS["frames_captured"] += 1
+                    frame_resized = cv2.resize(frame, (640, 480))
+
+                    if prev_frame is None:
+                        prev_frame = frame_resized.copy()
+                        continue
+
+                    motion_detected, motion_score = detect_motion(prev_frame, frame_resized)
+                    prev_frame = frame_resized.copy()
+
+                    if motion_detected:
+                        now = time.time()
+                        if now - last_trigger >= COOLDOWN_SECONDS:
+                            last_trigger = now
+                            CAMERA_STATUS["motion_triggers"] += 1
+                            CAMERA_STATUS["last_motion"] = now_iso()
+                            print(f"[{SERVICE_NAME}] 🏃 REAL Motion detected on URL stream! Score: {motion_score}")
+                            
+                            result = call_ai_vision(frame_resized, motion_score)
+                            publish_camera_event(result, motion_score)
+
+                    time.sleep(0.05)
+            except Exception as e:
+                print(f"[{SERVICE_NAME}] ❌ HTTP stream read error: {e}")
+                time.sleep(2)
+                try:
+                    stream = urllib.request.urlopen(cam_source, context=ctx, timeout=15)
+                    bytes_buffer = b""
+                except Exception:
+                    pass
+    else:
+        # Đọc bằng VideoCapture
+        while True:
+            try:
+                ret, frame = cap.read()
+                if not ret:
+                    print(f"[{SERVICE_NAME}] ⚠️ Failed to grab frame. Reconnecting...")
+                    cap.release()
+                    time.sleep(2)
+                    cap = cv2.VideoCapture(cam_source)
+                    continue
+
+                CAMERA_STATUS["frames_captured"] += 1
+                frame_resized = cv2.resize(frame, (640, 480))
+
+                if prev_frame is None:
+                    prev_frame = frame_resized.copy()
+                    continue
+
+                motion_detected, motion_score = detect_motion(prev_frame, frame_resized)
+                prev_frame = frame_resized.copy()
+
+                if motion_detected:
+                    now = time.time()
+                    if now - last_trigger >= COOLDOWN_SECONDS:
+                        last_trigger = now
+                        CAMERA_STATUS["motion_triggers"] += 1
+                        CAMERA_STATUS["last_motion"] = now_iso()
+                        print(f"[{SERVICE_NAME}] 🏃 REAL Motion detected! Score: {motion_score}")
+                        result = call_ai_vision(frame_resized, motion_score)
+                        publish_camera_event(result, motion_score)
+
+                time.sleep(0.1)
+            except Exception as e:
+                print(f"[{SERVICE_NAME}] ❌ Camera loop error: {e}")
+                time.sleep(5)
+
+        cap.release()
 
 
 @app.on_event("startup")
