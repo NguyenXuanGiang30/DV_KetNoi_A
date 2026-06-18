@@ -1,94 +1,165 @@
 {
   "info": {
-    "name": "Notification Contract Tests",
+    "name": "Notification Service — Smart Campus",
+    "description": "API testing for Notification Service (A7) - Multi-channel notification dispatcher",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
-      "name": "00_Health",
+      "name": "00_Health & Setup",
       "item": [
         {
-          "name": "GET /health - alive check",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{baseUrl}}/health",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "health"
-              ]
-            }
-          },
+          "name": "GET /health — Service Health Check",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
                   "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('Response has service status', function () {",
+                  "pm.test('Response is healthy', function () {",
                   "  const json = pm.response.json();",
-                  "  pm.expect(json).to.have.property('status', 'ok');",
-                  "  pm.expect(json).to.have.property('service', 'notification');",
+                  "  pm.expect(json.status).to.equal('ok');",
+                  "  pm.expect(json.service).to.equal('notification');",
+                  "  pm.expect(json.version).to.exist;",
+                  "  pm.expect(json.time).to.exist;",
                   "});"
                 ]
               }
             }
-          ]
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
         }
       ]
     },
     {
-      "name": "01_Functional",
+      "name": "01_Send Notifications",
       "item": [
         {
-          "name": "POST /api/v1/notifications - send alert dispatch",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"source_service\": \"core-business\",\n  \"alert_type\": \"SENSOR_THRESHOLD_EXCEEDED\",\n  \"severity\": \"HIGH\",\n  \"message\": \"Lab A101 temperature exceeded threshold\",\n  \"channels\": [\"console\", \"telegram\"]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/notifications",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "notifications"
-              ]
-            }
-          },
+          "name": "POST — Console Only",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
                   "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
-                  "pm.test('Response has notification info', function () {",
+                  "pm.test('Notification created', function () {",
                   "  const json = pm.response.json();",
-                  "  pm.expect(json).to.have.property('notification_id');",
-                  "  pm.expect(json).to.have.property('status', 'sent');",
+                  "  pm.expect(json.notification_id).to.match(/^NOTIF-/);",
+                  "  pm.expect(json.status).to.equal('sent');",
+                  "  pm.expect(json.channels_sent).to.include('console');",
                   "});"
                 ]
               }
             }
-          ]
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{authToken}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"source_service\": \"core-business\", \"alert_type\": \"SENSOR_THRESHOLD_EXCEEDED\", \"severity\": \"HIGH\", \"message\": \"Nhiệt độ vượt ngưỡng 40°C\", \"channels\": [\"console\"]}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/notifications", "host": ["{{baseUrl}}"], "path": ["api", "v1", "notifications"]}
+          }
+        },
+        {
+          "name": "POST — All Channels (Email, Telegram, SMS, Dashboard)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('All channels included', function () {",
+                  "  const json = pm.response.json();",
+                  "  ['console', 'email', 'telegram', 'sms', 'dashboard'].forEach(ch => {",
+                  "    pm.expect(json.channels_sent).to.include(ch);",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{authToken}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"source_service\": \"core-business\", \"alert_type\": \"FIRE_ALARM_TRIGGERED\", \"severity\": \"CRITICAL\", \"message\": \"Cảnh báo cháy tại phòng máy chủ\", \"channels\": [\"console\", \"email\", \"telegram\", \"sms\", \"dashboard\"], \"recipients\": [\"admin@smart-campus.local\", \"+84903000000\"]}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/notifications", "host": ["{{baseUrl}}"], "path": ["api", "v1", "notifications"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "02_Query Dashboard",
+      "item": [
+        {
+          "name": "GET /api/v1/dashboard/notifications — List",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Has dashboard items', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('items');",
+                  "  pm.expect(json.items).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{authToken}}"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/dashboard/notifications?limit=10", "host": ["{{baseUrl}}"], "path": ["api", "v1", "dashboard", "notifications"], "query": [{"key": "limit", "value": "10"}]}
+          }
+        },
+        {
+          "name": "GET /api/v1/dashboard/statistics — Stats",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Has statistics', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('total_notifications');",
+                  "  pm.expect(json).to.have.property('severity_distribution');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{authToken}}"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/dashboard/statistics", "host": ["{{baseUrl}}"], "path": ["api", "v1", "dashboard", "statistics"]}
+          }
         }
       ]
     }
+  ],
+  "variable": [
+    {"key": "baseUrl", "value": "http://localhost:8007", "type": "string"},
+    {"key": "authToken", "value": "smart-campus-dev-token-2026", "type": "string"}
   ]
 }
