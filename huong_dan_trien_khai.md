@@ -174,3 +174,58 @@ Chạy lệnh uvicorn từ thư mục gốc của dự án.
     *Ví dụ:* Truy cập `http://192.168.1.20:8004/health` để xem dịch vụ AI Vision của Máy B có đang hoạt động tốt không. Kết quả trả về phải có định dạng JSON: `{"status": "ok", ...}`.
 2.  **Kiểm tra tính liên thông**:
     Khi bạn thực hiện quẹt thẻ tại cổng `Access Gate` (chạy trên Máy C), nó sẽ gửi một yêu cầu `POST /access/check` tới `Core Business` (chạy trên Máy A). Hãy kiểm tra log terminal của Máy A (chạy Core Business) xem có xuất hiện dòng thông tin xử lý sự kiện quẹt thẻ đó hay không.
+
+---
+
+## IV. HƯỚNG DẪN CẤU HÌNH VÀ CHẠY VỚI WEBCAM THẬT / AI NHẬN DIỆN THỰC TẾ
+
+Hệ thống hiện tại đã được nâng cấp để hỗ trợ **luồng hình ảnh thật từ Webcam** (hoặc IP Camera) và **nhận diện khuôn mặt thực tế** sử dụng mô hình Haar Cascade (OpenCV).
+
+### 1. Cấu hình nguồn Camera trong file `.env`
+Để sử dụng camera thật, bạn cần điều chỉnh giá trị biến `CAMERA_STREAM_URL` trong file `.env` trên máy chạy dịch vụ `camera-stream` (A2):
+
+*   **Sử dụng Webcam của Laptop (Khuyên dùng cho Demo):**
+    Đặt giá trị là `0` (hoặc `1` nếu laptop có nhiều camera):
+    ```ini
+    CAMERA_STREAM_URL=0
+    ```
+*   **Sử dụng luồng IP Camera (Mạng LAN/Internet):**
+    Đặt giá trị là đường dẫn video stream (RTSP/HTTP/MJPEG):
+    ```ini
+    CAMERA_STREAM_URL=https://camera.labaiotdnu.app/video?key=matkhau_cua_ban
+    ```
+
+### 2. Lưu ý cực kỳ quan trọng về Docker và USB Webcam
+*   **Nếu chạy bằng Docker Compose:** Docker Desktop trên Windows/macOS **không hỗ trợ kết nối trực tiếp thiết bị USB (Webcam)** vào trong container theo cách mặc định. 
+    *   Vì vậy, nếu bạn đặt `CAMERA_STREAM_URL=0`, bạn **bắt buộc phải chạy dịch vụ `camera-stream` bằng Python thuần (Cách 2)** trực tiếp trên máy Host thì OpenCV mới có thể kết nối được tới Webcam của Laptop.
+    *   Nếu vẫn muốn chạy bằng Docker, bạn phải sử dụng nguồn là IP Camera (đường dẫn HTTP/RTSP URL thực tế).
+
+### 3. Cách chạy thực tế để Demo Webcam và AI:
+
+#### Phía máy chạy AI Vision (A4):
+*   Khi khởi động, dịch vụ `ai-vision` sẽ tự động tải file mô hình nhận diện khuôn mặt (`haarcascade_frontalface_default.xml` từ GitHub OpenCV) về thư mục dự án nếu chưa có.
+*   Bạn có thể khởi động dịch vụ bằng Docker hoặc Python thuần bình thường:
+    ```bash
+    docker compose up -d --build ai-vision
+    ```
+
+#### Phía máy chạy Camera Stream (A2):
+1.  Cắm Webcam vào laptop hoặc mở Webcam tích hợp sẵn.
+2.  Cấu hình `.env` dòng `CAMERA_STREAM_URL=0`.
+3.  Khởi chạy dịch vụ `camera-stream` bằng **Python thuần** để truy cập được Webcam:
+    ```bash
+    # Di chuyển vào thư mục dự án
+    cd DV_KetNoi_A
+    # Kích hoạt môi trường ảo đã tạo ở Cách 2
+    .\venv\Scripts\activate
+    # Cài đặt các thư viện mới (opencv-python-headless và numpy)
+    pip install -r services/camera_stream/requirements.txt
+    # Khởi chạy dịch vụ ở cổng 8002
+    uvicorn main:app --app-dir services/camera_stream/src --host 0.0.0.0 --port 8002
+    ```
+
+#### Kết quả hiển thị:
+*   Mỗi khi bạn đưa khuôn mặt của mình ra trước Webcam, dịch vụ `camera-stream` sẽ phát hiện có chuyển động thực tế (dựa trên sự thay đổi các pixel hình ảnh).
+*   Nó sẽ chụp ảnh frame đó, mã hóa Base64 và gửi sang dịch vụ `ai-vision`.
+*   Dịch vụ `ai-vision` sẽ xử lý ảnh bằng OpenCV, quét và xác định tọa độ các khuôn mặt (BBox) thực tế trong phòng và trả về kết quả chính xác, in log thành công.
+
