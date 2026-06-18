@@ -149,6 +149,7 @@ def process_rfid_event(raw: dict) -> Optional[dict]:
         student_id = None
         full_name = None
         class_name = None
+        
 
     event_id = f"access-event-{uuid.uuid4().hex[:8]}"
     processed = {
@@ -211,6 +212,28 @@ def start_mqtt_client():
 
                 processed = process_rfid_event(raw)
                 if processed:
+                    # Gọi Core Business kiểm tra policy (async call — không chặn)
+                    import asyncio
+                    try:
+                        loop = asyncio.get_event_loop()
+                    except RuntimeError:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                    
+                    policy_result = loop.run_until_complete(
+                        check_policy_with_core(
+                            processed["uid"], 
+                            processed["door_id"], 
+                            processed["direction"]
+                        )
+                    )
+                    
+                    # Nếu Core Business trả lời, cập nhật access_result
+                    if policy_result:
+                        processed["access_result"] = policy_result.get("access_result", processed["access_result"])
+                        processed["reason"] = policy_result.get("reason", processed["reason"])
+                        print(f"[{SERVICE_NAME}] 🔄 Core Business policy check: {policy_result}")
+                    
                     ACCESS_LOGS.append(processed)
                     client.publish(TOPIC_EVENTS, json.dumps(processed), qos=1)
                     emoji = "✅" if processed["access_result"] == "granted" else "🚫"
