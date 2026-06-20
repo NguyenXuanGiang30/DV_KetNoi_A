@@ -38,8 +38,8 @@ export default {
           '100%': { transform: 'translateY(100%)' },
         },
         laser: {
-          '0%, 100%': { transform: 'translateY(0%)', opacity: 0.2 },
-          '50%': { transform: 'translateY(100%)', opacity: 0.8 },
+          '0%, 100%': { top: '0%', opacity: 0.3 },
+          '50%': { top: '100%', opacity: 0.9 },
         },
         glowCyan: {
           '0%': { boxShadow: '0 0 5px rgba(0, 240, 255, 0.2), 0 0 10px rgba(0, 240, 255, 0.1)' },

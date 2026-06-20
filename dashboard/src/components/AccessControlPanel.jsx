@@ -17,7 +17,7 @@ export default function AccessControlPanel({ accessLogs }) {
 
       {/* Laser Scanning Simulator Visual HUD */}
       <div className="relative w-full h-32 bg-slate-950/80 border border-slate-900 rounded overflow-hidden mb-4 flex items-center justify-center font-mono">
-        <div className="absolute top-0 left-0 w-full h-[1px] bg-cyber-cyan shadow-[0_0_8px_#00f0ff] animate-laser" />
+        <div className="absolute left-0 w-full h-[2px] bg-cyber-cyan shadow-[0_0_12px_#00f0ff] animate-laser" />
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#00f0ff_1px,transparent_1px)] [background-size:16px_16px]" />
         
         <div className="text-center z-10 p-4">

@@ -89,7 +89,7 @@ export default function App() {
   const anyServiceDown = Object.values(serviceStatus).some(status => !status);
 
   return (
-    <div className="min-h-screen bg-cyber-bg cyber-grid cyber-grid-radial cyber-scanline relative flex flex-col text-slate-200 selection:bg-cyber-cyan selection:text-black">
+    <div className="min-h-screen bg-cyber-bg cyber-grid cyber-grid-radial relative flex flex-col text-slate-200 selection:bg-cyber-cyan selection:text-black">
       {/* HUD Header */}
       <HUDHeader stats={metrics} serviceStatus={serviceStatus} />
 

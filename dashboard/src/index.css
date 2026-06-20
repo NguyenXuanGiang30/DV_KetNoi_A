@@ -4,49 +4,34 @@
 
 @layer base {
   body {
-    background-color: #020617;
+    background-color: #0b0f19;
     color: #e2e8f0;
     overflow-x: hidden;
-    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Rajdhani', 'Segoe UI', Roboto, sans-serif;
   }
 }
 
-/* Background Cyber Grid */
+/* Background Cyber Grid - Much more subtle to improve contrast and reduce clutter */
 .cyber-grid {
-  background-size: 50px 50px;
+  background-size: 60px 60px;
   background-image: 
-    linear-gradient(to right, rgba(30, 41, 59, 0.4) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(30, 41, 59, 0.4) 1px, transparent 1px);
+    linear-gradient(to right, rgba(51, 65, 85, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(51, 65, 85, 0.08) 1px, transparent 1px);
 }
 
 .cyber-grid-radial {
-  background: radial-gradient(circle at 50% 50%, rgba(15, 23, 42, 0.7) 0%, #020617 100%);
+  background: radial-gradient(circle at 50% 50%, rgba(15, 23, 42, 0.9) 0%, #080b13 100%);
 }
 
-/* Scanline Effect */
-.cyber-scanline::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    rgba(18, 16, 16, 0) 50%, 
-    rgba(0, 0, 0, 0.15) 50%
-  );
-  background-size: 100% 4px;
-  z-index: 10;
-  pointer-events: none;
-}
+/* Remove scanline entirely to clear the CRT distortion */
 
 /* Customized scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: #020617;
+  background: #080b13;
 }
 ::-webkit-scrollbar-thumb {
   background: #1e293b;
@@ -54,43 +39,49 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #00f0ff;
-  box-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
 }
 
-/* Glowing text shadows */
+/* Glowing text shadows (Subtle & clean) */
 .text-glow-cyan {
-  text-shadow: 0 0 8px rgba(0, 240, 255, 0.7), 0 0 15px rgba(0, 240, 255, 0.3);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
 }
 
 .text-glow-pink {
-  text-shadow: 0 0 8px rgba(255, 0, 127, 0.7), 0 0 15px rgba(255, 0, 127, 0.3);
+  text-shadow: 0 0 8px rgba(255, 0, 127, 0.5);
 }
 
 .text-glow-green {
-  text-shadow: 0 0 8px rgba(0, 255, 102, 0.7), 0 0 15px rgba(0, 255, 102, 0.3);
+  text-shadow: 0 0 8px rgba(0, 255, 102, 0.5);
 }
 
 .text-glow-amber {
-  text-shadow: 0 0 8px rgba(255, 183, 3, 0.7), 0 0 15px rgba(255, 183, 3, 0.3);
+  text-shadow: 0 0 8px rgba(255, 183, 3, 0.5);
 }
 
 .text-glow-red {
-  text-shadow: 0 0 8px rgba(255, 0, 85, 0.8), 0 0 15px rgba(255, 0, 85, 0.4);
+  text-shadow: 0 0 10px rgba(255, 0, 85, 0.6);
 }
 
-/* Glassmorphism utility */
+/* Glassmorphism panel - Clean, premium dark cards */
 .glass-panel {
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.03);
 }
 
 .cyber-panel {
   position: relative;
-  background: rgba(11, 19, 41, 0.75);
-  border: 1px solid #1e293b;
-  box-shadow: inset 0 0 12px rgba(0, 240, 255, 0.05);
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(51, 65, 85, 0.4);
+  border-radius: 6px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cyber-panel:hover {
+  border-color: rgba(0, 240, 255, 0.3);
+  box-shadow: 0 10px 30px rgba(0, 240, 255, 0.04);
 }
 
 /* Cyber corner cuts */
@@ -99,10 +90,10 @@
   position: absolute;
   top: -1px;
   left: -1px;
-  width: 10px;
-  height: 10px;
-  border-top: 2px solid #00f0ff;
-  border-left: 2px solid #00f0ff;
+  width: 8px;
+  height: 8px;
+  border-top: 2px solid rgba(0, 240, 255, 0.7);
+  border-left: 2px solid rgba(0, 240, 255, 0.7);
   pointer-events: none;
 }
 
@@ -111,9 +102,9 @@
   position: absolute;
   bottom: -1px;
   right: -1px;
-  width: 10px;
-  height: 10px;
-  border-bottom: 2px solid #00f0ff;
-  border-right: 2px solid #00f0ff;
+  width: 8px;
+  height: 8px;
+  border-bottom: 2px solid rgba(0, 240, 255, 0.7);
+  border-right: 2px solid rgba(0, 240, 255, 0.7);
   pointer-events: none;
 }
