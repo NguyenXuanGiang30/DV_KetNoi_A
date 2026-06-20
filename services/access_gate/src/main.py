@@ -172,11 +172,11 @@ def process_rfid_event(raw: dict) -> Optional[dict]:
 
 
 # ── Optional: Check policy with Core Business (cặp 10) ──
-async def check_policy_with_core(uid: str, door_id: str, direction: str) -> Optional[dict]:
+def check_policy_with_core(uid: str, door_id: str, direction: str) -> Optional[dict]:
     """Gọi Core Business kiểm tra policy ra/vào (có thể thất bại — fail-open)."""
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.post(
+        with httpx.Client(timeout=5.0) as client:
+            resp = client.post(
                 f"{CORE_BUSINESS_URL}/access/check",
                 json={"uid": uid, "door_id": door_id, "direction": direction},
                 headers={"Authorization": f"Bearer {AUTH_TOKEN}"},
@@ -212,20 +212,10 @@ def start_mqtt_client():
 
                 processed = process_rfid_event(raw)
                 if processed:
-                    # Gọi Core Business kiểm tra policy (async call — không chặn)
-                    import asyncio
-                    try:
-                        loop = asyncio.get_event_loop()
-                    except RuntimeError:
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                    
-                    policy_result = loop.run_until_complete(
-                        check_policy_with_core(
-                            processed["uid"], 
-                            processed["door_id"], 
-                            processed["direction"]
-                        )
+                    policy_result = check_policy_with_core(
+                        processed["uid"], 
+                        processed["door_id"], 
+                        processed["direction"]
                     )
                     
                     # Nếu Core Business trả lời, cập nhật access_result

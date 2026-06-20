@@ -8,6 +8,7 @@ import json
 import os
 import ssl
 import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
@@ -83,53 +84,149 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+# ── Deduplication and Audit Storage ──
+ALERT_COOLDOWNS = {}  # Key: (alert_type, source_id), Value: timestamp (float)
+AUDIT_LOG_FILE = "audit.log"
+
+def write_audit_log(event_id: str, event_type: str, rule: str, decision: str, detail: str):
+    """Ghi log audit có cấu trúc để đối soát."""
+    log_entry = {
+        "timestamp": now_iso(),
+        "event_id": event_id,
+        "event_type": event_type,
+        "rule_evaluated": rule,
+        "decision": decision,
+        "detail": detail
+    }
+    try:
+        with open(AUDIT_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+    except Exception as e:
+        print(f"[{SERVICE_NAME}] ⚠️ Failed to write audit log: {e}")
+
+
 # ── Policy Engine ──
 def evaluate_sensor_event(event: dict):
-    """Đánh giá event cảm biến và tạo alert nếu cần."""
+    """Đánh giá event cảm biến và tạo alert nếu cần, có chống nhiễu (deduplication)."""
     evt_status = event.get("status", "normal")
-    if evt_status in ("danger", "sensor_error", "invalid_device"):
-        create_alert(
-            alert_type="SENSOR_THRESHOLD_EXCEEDED" if evt_status == "danger" else "SYSTEM_ERROR",
-            severity="HIGH" if evt_status == "danger" else "MEDIUM",
-            message=f"[{evt_status.upper()}] Device {event.get('device_id')}: {event.get('reason')} "
-                    f"(Temp: {event.get('temperature_c')}°C)",
-            related_event_id=event.get("event_id"),
-        )
+    device_id = event.get("device_id", "unknown")
+    event_id = event.get("event_id", "unknown")
+    event_type = event.get("event_type", "sensor")
+    
+    if evt_status == "normal":
+        write_audit_log(event_id, event_type, "sensor_status_normal", "NO_ALERT", f"Sensor status normal for device {device_id}")
+        return
+
+    # Xác định mức độ nghiêm trọng và loại cảnh báo
+    if evt_status == "danger":
+        severity = "CRITICAL"
+        alert_type = "SENSOR_THRESHOLD_EXCEEDED"
+        rule = "sensor_danger_threshold"
+        message = f"[CRITICAL] Device {device_id} in {event.get('location')}: {event.get('reason')} (Temp: {event.get('temperature_c')}°C, CO2: {event.get('co2_ppm')}ppm, Smoke: {event.get('smoke_ppm')})"
+    elif evt_status == "sensor_error":
+        severity = "HIGH"
+        alert_type = "SYSTEM_ERROR"
+        rule = "sensor_value_null"
+        message = f"[HIGH] Device {device_id} in {event.get('location')}: Sensor data error ({event.get('reason')})"
+    elif evt_status == "invalid_device":
+        severity = "HIGH"
+        alert_type = "SYSTEM_ERROR"
+        rule = "sensor_device_not_registered"
+        message = f"[HIGH] Unregistered device detected: {device_id} in {event.get('location')}"
     elif evt_status == "warning":
-        create_alert(
-            alert_type="SENSOR_THRESHOLD_EXCEEDED",
-            severity="MEDIUM",
-            message=f"[WARNING] Device {event.get('device_id')}: {event.get('reason')}",
-            related_event_id=event.get("event_id"),
-        )
+        severity = "MEDIUM"
+        alert_type = "SENSOR_THRESHOLD_EXCEEDED"
+        rule = "sensor_warning_threshold"
+        message = f"[WARNING] Device {device_id} in {event.get('location')}: {event.get('reason')} (Temp: {event.get('temperature_c')}°C, Battery: {event.get('battery_percent')}%)"
+    else:
+        return
+
+    # Kiểm tra trùng lặp (Deduplication)
+    cooldown_key = (alert_type, device_id)
+    now = time.time()
+    if cooldown_key in ALERT_COOLDOWNS and (now - ALERT_COOLDOWNS[cooldown_key]) < 60.0:
+        write_audit_log(event_id, event_type, rule, "DEDUPLICATED", f"Skipped alert creation due to 60s cooldown for {cooldown_key}")
+        return
+
+    ALERT_COOLDOWNS[cooldown_key] = now
+    create_alert(
+        alert_type=alert_type,
+        severity=severity,
+        message=message,
+        related_event_id=event_id,
+    )
+    write_audit_log(event_id, event_type, rule, "ALERT_CREATED", f"Created {severity} alert: {message}")
 
 
 def evaluate_access_event(event: dict):
-    """Đánh giá event ra/vào và tạo alert nếu denied."""
-    if event.get("access_result") == "denied":
+    """Đánh giá event ra/vào và tạo alert nếu bị từ chối, có chống nhiễu (deduplication)."""
+    access_result = event.get("access_result")
+    uid = event.get("uid", "unknown")
+    event_id = event.get("event_id", "unknown")
+    event_type = event.get("event_type", "access")
+    
+    if access_result == "granted":
+        write_audit_log(event_id, event_type, "access_granted", "NO_ALERT", f"Access granted to student: {event.get('full_name')} (UID: {uid})")
+        return
+
+    if access_result == "denied":
+        severity = "HIGH"
+        alert_type = "UNAUTHORIZED_ACCESS"
+        rule = "access_swipe_denied"
+        message = f"[HIGH] Access denied at {event.get('location', 'Unknown')}: UID {uid} - {event.get('reason')}"
+
+        # Kiểm tra trùng lặp (Deduplication)
+        cooldown_key = (alert_type, uid)
+        now = time.time()
+        if cooldown_key in ALERT_COOLDOWNS and (now - ALERT_COOLDOWNS[cooldown_key]) < 60.0:
+            write_audit_log(event_id, event_type, rule, "DEDUPLICATED", f"Skipped denied access alert due to 60s cooldown for {cooldown_key}")
+            return
+
+        ALERT_COOLDOWNS[cooldown_key] = now
         create_alert(
-            alert_type="UNAUTHORIZED_ACCESS",
-            severity="HIGH",
-            message=f"Truy cập bị từ chối tại {event.get('location', 'Unknown')}: "
-                    f"UID {event.get('uid')} - {event.get('reason')}",
-            related_event_id=event.get("event_id"),
+            alert_type=alert_type,
+            severity=severity,
+            message=message,
+            related_event_id=event_id,
         )
+        write_audit_log(event_id, event_type, rule, "ALERT_CREATED", f"Created {severity} alert: {message}")
 
 
 def evaluate_camera_event(event: dict):
-    """Đánh giá event camera."""
-    if event.get("unknown_person"):
-        create_alert(
-            alert_type="UNKNOWN_PERSON",
-            severity="HIGH",
-            message=f"Phát hiện người lạ tại {event.get('location', 'Unknown')} "
-                    f"(confidence: {event.get('motion_score', 'N/A')})",
-            related_event_id=event.get("event_id"),
-        )
+    """Đánh giá event camera và phát cảnh báo người lạ, có chống nhiễu."""
+    unknown_person = event.get("unknown_person")
+    camera_id = event.get("camera_id", "unknown")
+    event_id = event.get("event_id", "unknown")
+    event_type = event.get("event_type", "camera")
+
+    if not unknown_person:
+        write_audit_log(event_id, event_type, "camera_no_threat", "NO_ALERT", f"No threat detected on camera {camera_id}")
+        return
+
+    severity = "HIGH"
+    alert_type = "UNKNOWN_PERSON"
+    rule = "camera_unknown_person"
+    message = f"[HIGH] Unknown person detected at {event.get('location', 'Unknown')} on camera {camera_id}"
+
+    # Kiểm tra trùng lặp (Deduplication)
+    cooldown_key = (alert_type, camera_id)
+    now = time.time()
+    if cooldown_key in ALERT_COOLDOWNS and (now - ALERT_COOLDOWNS[cooldown_key]) < 60.0:
+        write_audit_log(event_id, event_type, rule, "DEDUPLICATED", f"Skipped unknown person alert due to 60s cooldown for {cooldown_key}")
+        return
+
+    ALERT_COOLDOWNS[cooldown_key] = now
+    create_alert(
+        alert_type=alert_type,
+        severity=severity,
+        message=message,
+        related_event_id=event_id,
+    )
+    write_audit_log(event_id, event_type, rule, "ALERT_CREATED", f"Created {severity} alert: {message}")
 
 
 def create_alert(alert_type: str, severity: str, message: str, related_event_id: str = None):
-    """Tạo alert, publish lên MQTT và gửi cho Notification."""
+    """Tạo alert và publish lên MQTT (Notification và Analytics sẽ tiêu thụ qua MQTT)."""
     alert_id = f"ALERT-{uuid.uuid4().hex[:8].upper()}"
     alert = {
         "id": alert_id,
@@ -145,42 +242,18 @@ def create_alert(alert_type: str, severity: str, message: str, related_event_id:
     ALERTS.append(alert)
     print(f"[{SERVICE_NAME}] 🚨 Alert created: [{severity}] {alert_type}: {message}")
 
-    # Publish alert event trên MQTT (cặp 8: Core → Analytics)
+    # Publish alert event trên MQTT (cặp 8: Core → Analytics/Notification)
     if mqtt_client_ref:
         try:
             mqtt_client_ref.publish(TOPIC_CORE_ALERT, json.dumps(alert), qos=1)
+            print(f"[{SERVICE_NAME}] 📡 Alert published to MQTT topic: {TOPIC_CORE_ALERT}")
         except Exception as e:
             print(f"[{SERVICE_NAME}] ⚠️ Failed to publish alert to MQTT: {e}")
 
-    # Gửi notification (cặp 4: Core → Notification)
-    send_notification_async(alert)
-
 
 def send_notification_async(alert: dict):
-    """Gửi cảnh báo cho Notification Service (fire-and-forget)."""
-    def _send():
-        try:
-            with httpx.Client(timeout=5.0) as client:
-                resp = client.post(
-                    f"{NOTIFICATION_URL}/api/v1/notifications",
-                    json={
-                        "source_service": SERVICE_NAME,
-                        "alert_type": alert["alert_type"],
-                        "severity": alert["severity"],
-                        "message": alert["message"],
-                        "related_event_id": alert.get("related_event_id"),
-                        "channels": ["console", "telegram"],
-                    },
-                    headers={"Authorization": f"Bearer {AUTH_TOKEN}"},
-                )
-                if resp.status_code == 201:
-                    print(f"[{SERVICE_NAME}] ✅ Notification sent: {resp.json().get('notification_id')}")
-                else:
-                    print(f"[{SERVICE_NAME}] ⚠️ Notification response: {resp.status_code}")
-        except Exception as e:
-            print(f"[{SERVICE_NAME}] ⚠️ Notification failed: {e}")
-
-    threading.Thread(target=_send, daemon=True).start()
+    """(Deprecated) Gửi cảnh báo cho Notification Service qua HTTP REST."""
+    pass
 
 
 # ── MQTT Client ──

@@ -75,17 +75,26 @@ def load_device_registry():
     print(f"[{SERVICE_NAME}] ⚠️ Device registry CSV not found, using empty registry")
 
 
+# ── Helper for Safe Parsing ──
+def safe_float(val, default=None):
+    if val is None:
+        return default
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+
 # ── Classification logic ──
 def classify_environment(data: dict) -> tuple:
     """Phân loại trạng thái môi trường: (status, alert_level, reason)"""
-    temp = data.get("temperature_c")
-    humidity = data.get("humidity_percent")
-    co2 = data.get("co2_ppm", 0)
-    smoke = data.get("smoke_ppm", 0)
-    battery = data.get("battery_percent", 100)
+    temp = safe_float(data.get("temperature_c"))
+    humidity = safe_float(data.get("humidity_percent"))
+    co2 = safe_float(data.get("co2_ppm"), 0.0)
+    smoke = safe_float(data.get("smoke_ppm"), 0.0)
+    battery = safe_float(data.get("battery_percent"), 100.0)
     device_id = data.get("device_id", "")
 
-    # sensor_error: giá trị null
+    # sensor_error: giá trị null hoặc không hợp lệ (safe_float trả về None)
     if temp is None or humidity is None:
         return "sensor_error", "medium", "missing_sensor_value"
 
@@ -94,23 +103,23 @@ def classify_environment(data: dict) -> tuple:
         return "invalid_device", "high", "device_not_registered"
 
     # danger
-    if temp >= 40:
+    if temp >= 40.0:
         return "danger", "high", "temperature_too_high"
-    if co2 >= 1800:
+    if co2 >= 1800.0:
         return "danger", "high", "co2_too_high"
     if smoke >= 1.0:
         return "danger", "high", "smoke_detected"
 
     # warning
-    if temp >= 35:
+    if temp >= 35.0:
         return "warning", "medium", "temperature_high"
-    if humidity >= 85:
+    if humidity >= 85.0:
         return "warning", "medium", "humidity_high"
-    if co2 >= 1200:
+    if co2 >= 1200.0:
         return "warning", "medium", "co2_high"
     if smoke >= 0.5:
         return "warning", "medium", "smoke_warning"
-    if battery < 20:
+    if battery < 20.0:
         return "warning", "low", "low_battery"
 
     return "normal", "none", "environment_normal"
@@ -126,8 +135,30 @@ def process_raw_event(raw_payload: dict) -> Optional[dict]:
         print(f"[{SERVICE_NAME}] ❌ Missing fields: {missing}")
         return None
 
+    # Cast raw values to appropriate types
+    temp = safe_float(raw_payload.get("temperature_c"))
+    humidity = safe_float(raw_payload.get("humidity_percent"))
+    co2 = safe_float(raw_payload.get("co2_ppm"))
+    smoke = safe_float(raw_payload.get("smoke_ppm"))
+    battery = safe_float(raw_payload.get("battery_percent"))
+    
+    motion = raw_payload.get("motion_detected")
+    if isinstance(motion, str):
+        motion_detected = motion.lower() in ("true", "1", "yes")
+    else:
+        motion_detected = bool(motion)
+
+    typed_payload = {
+        "device_id": raw_payload.get("device_id"),
+        "temperature_c": temp,
+        "humidity_percent": humidity,
+        "co2_ppm": co2,
+        "smoke_ppm": smoke,
+        "battery_percent": battery,
+    }
+
     # Classify
-    env_status, alert_level, reason = classify_environment(raw_payload)
+    env_status, alert_level, reason = classify_environment(typed_payload)
 
     # Build processed event — loại bỏ scenario_hint_for_teacher
     event_id = f"sensor-event-{uuid.uuid4().hex[:8]}"
@@ -139,13 +170,13 @@ def process_raw_event(raw_payload: dict) -> Optional[dict]:
         "raw_event_id": raw_payload.get("event_id"),
         "device_id": raw_payload.get("device_id"),
         "location": raw_payload.get("location", "Unknown"),
-        "temperature_c": raw_payload.get("temperature_c"),
-        "humidity_percent": raw_payload.get("humidity_percent"),
-        "motion_detected": raw_payload.get("motion_detected", False),
-        "light_lux": raw_payload.get("light_lux"),
-        "co2_ppm": raw_payload.get("co2_ppm"),
-        "smoke_ppm": raw_payload.get("smoke_ppm"),
-        "battery_percent": raw_payload.get("battery_percent"),
+        "temperature_c": temp,
+        "humidity_percent": humidity,
+        "motion_detected": motion_detected,
+        "light_lux": safe_float(raw_payload.get("light_lux")),
+        "co2_ppm": co2,
+        "smoke_ppm": smoke,
+        "battery_percent": battery,
         "status": env_status,
         "alert_level": alert_level,
         "reason": reason,
@@ -184,6 +215,9 @@ def start_mqtt_client():
                                     "sensor_error": "⚠️", "invalid_device": "❌"}.get(processed["status"], "❓")
                     print(f"[{SERVICE_NAME}] {status_emoji} [{processed['status']}] "
                           f"Device: {processed['device_id']} | Temp: {processed['temperature_c']}°C | "
+                          f"Hum: {processed['humidity_percent']}% | CO2: {processed['co2_ppm']}ppm | "
+                          f"Smoke: {processed['smoke_ppm']}ppm | Light: {processed['light_lux']}lux | "
+                          f"Batt: {processed['battery_percent']}% | Motion: {processed['motion_detected']} | "
                           f"Reason: {processed['reason']}")
             except Exception as e:
                 print(f"[{SERVICE_NAME}] ❌ Error processing message: {e}")

@@ -104,44 +104,50 @@ def detect_motion(prev_frame, curr_frame) -> tuple:
     return motion_score >= MOTION_THRESHOLD, motion_score
 
 
-def call_ai_vision(frame: np.ndarray, motion_score: float) -> Optional[dict]:
-    """Gọi AI Vision để phát hiện vật thể qua Base64 (cặp 1)."""
-    try:
-        CAMERA_STATUS["ai_calls"] += 1
+def call_ai_vision(frame: np.ndarray, motion_score: float, request_id: str) -> Optional[dict]:
+    """Gọi AI Vision để phát hiện vật thể qua Base64 (cặp 1), hỗ trợ retry tối đa 2 lần (tổng 3 lần thử)."""
+    CAMERA_STATUS["ai_calls"] += 1
+    
+    # Encode frame sang JPG
+    _, buffer = cv2.imencode('.jpg', frame)
+    img_base64 = base64.b64encode(buffer).decode('utf-8')
+    
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                resp = client.post(
+                    f"{AI_VISION_URL}/detect",
+                    json={
+                        "request_id": request_id,
+                        "camera_id": CAMERA_ID,
+                        "image_base64": img_base64,
+                        "timestamp": now_iso(),
+                        "motion_score": motion_score,
+                    },
+                    headers={"Authorization": f"Bearer {AUTH_TOKEN}"},
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                else:
+                    print(f"[{SERVICE_NAME}] ⚠️ AI Vision returned {resp.status_code} (Attempt {attempt+1}/{max_attempts})")
+        except httpx.TimeoutException:
+            print(f"[{SERVICE_NAME}] ⚠️ AI Vision timeout (Attempt {attempt+1}/{max_attempts})")
+        except httpx.RequestError as e:
+            print(f"[{SERVICE_NAME}] ⚠️ AI Vision unreachable: {e} (Attempt {attempt+1}/{max_attempts})")
         
-        # Encode frame sang JPG
-        _, buffer = cv2.imencode('.jpg', frame)
-        img_base64 = base64.b64encode(buffer).decode('utf-8')
-        
-        with httpx.Client(timeout=10.0) as client:
-            resp = client.post(
-                f"{AI_VISION_URL}/detect",
-                json={
-                    "camera_id": CAMERA_ID,
-                    "image_base64": img_base64,
-                    "timestamp": now_iso(),
-                    "motion_score": motion_score,
-                },
-                headers={"Authorization": f"Bearer {AUTH_TOKEN}"},
-            )
-            if resp.status_code == 200:
-                return resp.json()
-            else:
-                print(f"[{SERVICE_NAME}] ⚠️ AI Vision returned {resp.status_code}")
-                CAMERA_STATUS["ai_failures"] += 1
-    except httpx.TimeoutException:
-        print(f"[{SERVICE_NAME}] ⚠️ AI Vision timeout")
-        CAMERA_STATUS["ai_failures"] += 1
-    except httpx.RequestError as e:
-        print(f"[{SERVICE_NAME}] ⚠️ AI Vision unreachable: {e}")
-        CAMERA_STATUS["ai_failures"] += 1
+        if attempt < max_attempts - 1:
+            time.sleep(1.0) # Wait 1s before retrying
+
+    CAMERA_STATUS["ai_failures"] += 1
     return None
 
 
-def publish_camera_event(detection_result: Optional[dict], motion_score: float):
+def publish_camera_event(detection_result: Optional[dict], motion_score: float, request_id: str):
     """Publish kết quả camera event lên MQTT."""
     event = {
         "event_id": f"camera-event-{uuid.uuid4().hex[:8]}",
+        "request_id": request_id,
         "event_type": "camera.vision.processed",
         "source_service": SERVICE_NAME,
         "camera_id": CAMERA_ID,
@@ -155,6 +161,7 @@ def publish_camera_event(detection_result: Optional[dict], motion_score: float):
         event["detections"] = detection_result.get("detections", [])
         event["unknown_person"] = detection_result.get("unknown_person", False)
         event["risk_level"] = detection_result.get("risk_level", "low")
+        event["request_id"] = detection_result.get("request_id", request_id)
     else:
         event["detections"] = []
         event["unknown_person"] = False
@@ -197,8 +204,9 @@ def fallback_camera_loop():
                     cv2.putText(dummy_frame, "FALLBACK MOCK CAMERA", (100, 240),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
                     
-                    result = call_ai_vision(dummy_frame, motion_score)
-                    publish_camera_event(result, motion_score)
+                    req_id = f"vision-req-{uuid.uuid4().hex[:8]}"
+                    result = call_ai_vision(dummy_frame, motion_score, req_id)
+                    publish_camera_event(result, motion_score, req_id)
         except Exception as e:
             print(f"[{SERVICE_NAME}] ❌ Fallback loop error: {e}")
             time.sleep(5)
@@ -305,9 +313,9 @@ def camera_processing_loop():
                             CAMERA_STATUS["motion_triggers"] += 1
                             CAMERA_STATUS["last_motion"] = now_iso()
                             print(f"[{SERVICE_NAME}] 🏃 REAL Motion detected on URL stream! Score: {motion_score}")
-                            
-                            result = call_ai_vision(frame_resized, motion_score)
-                            publish_camera_event(result, motion_score)
+                            req_id = f"vision-req-{uuid.uuid4().hex[:8]}"
+                            result = call_ai_vision(frame_resized, motion_score, req_id)
+                            publish_camera_event(result, motion_score, req_id)
 
                     time.sleep(0.05)
             except Exception as e:
@@ -347,8 +355,9 @@ def camera_processing_loop():
                         CAMERA_STATUS["motion_triggers"] += 1
                         CAMERA_STATUS["last_motion"] = now_iso()
                         print(f"[{SERVICE_NAME}] 🏃 REAL Motion detected! Score: {motion_score}")
-                        result = call_ai_vision(frame_resized, motion_score)
-                        publish_camera_event(result, motion_score)
+                        req_id = f"vision-req-{uuid.uuid4().hex[:8]}"
+                        result = call_ai_vision(frame_resized, motion_score, req_id)
+                        publish_camera_event(result, motion_score, req_id)
 
                 time.sleep(0.1)
             except Exception as e:

@@ -52,6 +52,7 @@ class HealthResponse(BaseModel):
 
 
 class DetectionRequest(BaseModel):
+    request_id: Optional[str] = None
     camera_id: str = Field(..., min_length=3, examples=["cam-gate-a"])
     image_url: Optional[str] = Field(default=None, examples=["https://example.com/frame.jpg"])
     image_base64: Optional[str] = Field(default=None, description="Base64 encoded image")
@@ -206,19 +207,13 @@ def detect_image(req: DetectionRequest):
 
     # 3. Fallback dự phòng nếu không thấy người hoặc lỗi ảnh
     if not detections:
-        import random
-        labels = ["vehicle", "unknown"]
-        label = random.choice(labels)
-        confidence = round(random.uniform(0.70, 0.95), 2)
-        detections.append(DetectionItem(
-            label=label,
-            confidence=confidence,
-            bbox=BBox(x=120, y=80, width=210, height=430)
-        ))
-        risk_level = "medium" if label == "unknown" else "low"
+        # Nghiệp vụ: Không phát hiện gì -> detections rỗng, risk_level thấp
+        risk_level = "low"
+        unknown_person = False
 
     result = DetectionResponse(
         detection_id=detection_id,
+        request_id=req.request_id,
         camera_id=req.camera_id,
         timestamp=ts,
         detections=detections,

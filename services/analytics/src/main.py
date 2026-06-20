@@ -51,6 +51,9 @@ METRICS = {
 }
 TEMP_BY_ROOM: Dict[str, List[float]] = defaultdict(list)
 HUMIDITY_BY_ROOM: Dict[str, List[float]] = defaultdict(list)
+ALERT_COUNTS = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+LOW_BATTERY_DEVICES: Dict[str, Dict] = {}  # device_id -> {device_id, location, battery_percent}
+ACCESS_COUNT_BY_HOUR: Dict[str, int] = defaultdict(int)
 RECENT_EVENTS: List[Dict] = []
 MQTT_STATUS = {"connected": False, "message_count": 0}
 
@@ -73,6 +76,18 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def extract_hour_from_timestamp(ts_str: Optional[str]) -> str:
+    if not ts_str:
+        return f"{datetime.now().hour:02d}"
+    try:
+        # Ví dụ: "2026-06-20T14:30:15Z" -> "14"
+        if "T" in ts_str:
+            return ts_str.split("T")[1][:2]
+        return f"{datetime.now().hour:02d}"
+    except Exception:
+        return f"{datetime.now().hour:02d}"
+
+
 # ── Event processors ──
 def process_sensor_event(event: dict):
     METRICS["sensor_events"] += 1
@@ -92,9 +107,18 @@ def process_sensor_event(event: dict):
         if len(HUMIDITY_BY_ROOM[location]) > 1000:
             HUMIDITY_BY_ROOM[location] = HUMIDITY_BY_ROOM[location][-500:]
 
-    battery = event.get("battery_percent", 100)
-    if battery is not None and battery < 20:
-        METRICS["low_battery_count"] += 1
+    battery = event.get("battery_percent")
+    device_id = event.get("device_id")
+    if battery is not None and device_id:
+        if battery < 20:
+            LOW_BATTERY_DEVICES[device_id] = {
+                "device_id": device_id,
+                "location": location,
+                "battery_percent": battery
+            }
+        else:
+            LOW_BATTERY_DEVICES.pop(device_id, None)
+    METRICS["low_battery_count"] = len(LOW_BATTERY_DEVICES)
 
 
 def process_access_event(event: dict):
@@ -105,6 +129,10 @@ def process_access_event(event: dict):
     elif result == "denied":
         METRICS["access_denied"] += 1
 
+    ts = event.get("timestamp")
+    hour_str = extract_hour_from_timestamp(ts)
+    ACCESS_COUNT_BY_HOUR[hour_str] += 1
+
 
 def process_camera_event(event: dict):
     METRICS["camera_events"] += 1
@@ -112,6 +140,11 @@ def process_camera_event(event: dict):
 
 def process_core_alert(event: dict):
     METRICS["core_alerts"] += 1
+    severity = str(event.get("severity", "LOW")).lower()
+    if severity in ALERT_COUNTS:
+        ALERT_COUNTS[severity] += 1
+    else:
+        ALERT_COUNTS[severity] = ALERT_COUNTS.get(severity, 0) + 1
 
 
 # ── MQTT Client ──
@@ -191,7 +224,7 @@ def health():
 
 @app.get("/api/v1/metrics", dependencies=[Depends(verify_token)])
 def get_all_metrics():
-    """Dashboard KPI tổng hợp."""
+    """Dashboard KPI tổng hợp theo schema PDF trang 17."""
     avg_temp = {}
     for room, temps in TEMP_BY_ROOM.items():
         if temps:
@@ -202,10 +235,30 @@ def get_all_metrics():
         if hums:
             avg_humidity[room] = round(sum(hums) / len(hums), 1)
 
+    # Tính peak_access_hour
+    peak_hour_str = "N/A"
+    if ACCESS_COUNT_BY_HOUR:
+        peak_hour = max(ACCESS_COUNT_BY_HOUR, key=ACCESS_COUNT_BY_HOUR.get)
+        try:
+            next_hour = (int(peak_hour) + 1) % 24
+            peak_hour_str = f"{peak_hour}:00 - {next_hour:02d}:00"
+        except Exception:
+            peak_hour_str = f"{peak_hour}:00 - {peak_hour}:59"
+
     total_access = METRICS["access_granted"] + METRICS["access_denied"]
     deny_rate = round(METRICS["access_denied"] / total_access * 100, 1) if total_access > 0 else 0
 
     return {
+        "average_temperature": avg_temp,
+        "average_humidity": avg_humidity,
+        "alert_counts": ALERT_COUNTS,
+        "low_battery_devices": list(LOW_BATTERY_DEVICES.values()),
+        "access_stats": {
+            "total_success": METRICS["access_granted"],
+            "total_denied": METRICS["access_denied"]
+        },
+        "peak_access_hour": peak_hour_str,
+        # Giữ tương thích ngược với dashboard hiện tại
         "counters": METRICS,
         "avg_temperature_by_room": avg_temp,
         "avg_humidity_by_room": avg_humidity,
