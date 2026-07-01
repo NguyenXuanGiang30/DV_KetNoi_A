@@ -1,0 +1,1739 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Campus — Analytics Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(22, 30, 47, 0.7);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --card-hover-border: rgba(99, 102, 241, 0.4);
+            
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.15);
+            
+            --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.15);
+            
+            --warning: #f59e0b;
+            --warning-glow: rgba(245, 158, 11, 0.15);
+            
+            --danger: #ef4444;
+            --danger-glow: rgba(239, 68, 68, 0.2);
+            
+            --sensor-color: #06b6d4;
+            --access-color: #10b981;
+            --camera-color: #a855f7;
+            --alert-color: #f43f5e;
+            
+            --transition-speed: 0.3s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.05) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.05) 0px, transparent 50%),
+                radial-gradient(at 50% 100%, rgba(6, 182, 212, 0.03) 0px, transparent 50%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            padding-bottom: 2rem;
+        }
+
+        h1, h2, h3, .font-outfit {
+            font-family: 'Outfit', sans-serif;
+        }
+
+        /* Container Layout */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+
+        /* Top Header */
+        header {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--card-border);
+            padding-bottom: 1.5rem;
+        }
+
+        @media (min-width: 768px) {
+            header {
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: center;
+            }
+        }
+
+        .header-title-area {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .header-icon {
+            font-size: 2.2rem;
+            background: linear-gradient(135deg, var(--primary), #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 2px 8px rgba(99, 102, 241, 0.4));
+        }
+
+        .header-title-text h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #ffffff, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-title-text p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .header-status-area {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        /* Badges & Readiness Banner */
+        .status-banner {
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transition: all var(--transition-speed);
+        }
+
+        .status-banner.ready {
+            background-color: var(--success-glow);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #34d399;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.1);
+        }
+
+        .status-banner.waiting {
+            background-color: var(--warning-glow);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            color: #fbbf24;
+            box-shadow: 0 0 15px rgba(245, 158, 11, 0.1);
+        }
+
+        .mqtt-badge {
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--card-border);
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .mqtt-badge .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .mqtt-badge.connected .dot {
+            background-color: var(--success);
+            box-shadow: 0 0 8px var(--success);
+            animation: pulse-dot 2s infinite;
+        }
+
+        .mqtt-badge.disconnected .dot {
+            background-color: var(--danger);
+            box-shadow: 0 0 8px var(--danger);
+        }
+
+        @keyframes pulse-dot {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.15); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+
+        /* KPI Cards Grid */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(1, minmax(0, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (min-width: 576px) {
+            .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+        @media (min-width: 1024px) {
+            .kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        }
+
+        .kpi-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 1rem;
+            padding: 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            backdrop-filter: blur(12px);
+            transition: all var(--transition-speed);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--card-hover-border);
+            box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.15);
+        }
+
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+        }
+
+        .kpi-card.sensor::before { background-color: var(--sensor-color); }
+        .kpi-card.access::before { background-color: var(--access-color); }
+        .kpi-card.camera::before { background-color: var(--camera-color); }
+        .kpi-card.alerts::before { background-color: var(--alert-color); }
+
+        .kpi-info h3 {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .kpi-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            color: #ffffff;
+        }
+
+        .kpi-icon-wrapper {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .kpi-card.sensor .kpi-icon-wrapper { background-color: rgba(6, 182, 212, 0.1); color: var(--sensor-color); }
+        .kpi-card.access .kpi-icon-wrapper { background-color: rgba(16, 185, 129, 0.1); color: var(--access-color); }
+        .kpi-card.camera .kpi-icon-wrapper { background-color: rgba(168, 85, 247, 0.1); color: var(--camera-color); }
+        .kpi-card.alerts .kpi-icon-wrapper { background-color: rgba(244, 63, 94, 0.1); color: var(--alert-color); }
+
+        /* Dashboard Body Content: 2 Columns Grid */
+        .dashboard-body {
+            display: grid;
+            grid-template-columns: repeat(1, minmax(0, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (min-width: 1024px) {
+            .dashboard-body { grid-template-columns: 1.2fr 0.8fr; }
+        }
+
+        .panel-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 0.75rem;
+        }
+
+        .panel-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #ffffff;
+        }
+
+        .panel-title i {
+            color: var(--primary);
+        }
+
+        /* Integration Status Table */
+        .status-table-wrapper {
+            overflow-x: auto;
+            width: 100%;
+        }
+
+        .status-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.85rem;
+        }
+
+        .status-table th {
+            color: var(--text-muted);
+            font-weight: 500;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+        }
+
+        .status-table td {
+            padding: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            color: var(--text-secondary);
+        }
+
+        .status-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .source-name {
+            font-weight: 600;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.6rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-pill.online {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .status-pill.offline {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        /* Automated Insights */
+        .insights-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .insight-item {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 0.5rem;
+            padding: 0.9rem 1.1rem;
+            font-size: 0.85rem;
+            line-height: 1.45;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            transition: background var(--transition-speed);
+        }
+
+        .insight-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        /* Warnings Hub */
+        .alert-hub {
+            max-height: 250px;
+            overflow-y: auto;
+            padding-right: 4px;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .alert-log-item {
+            border-radius: 0.5rem;
+            padding: 0.85rem 1rem;
+            display: flex;
+            gap: 0.75rem;
+            align-items: flex-start;
+            border-left: 4px solid transparent;
+            animation: pulse-alert-border 2s infinite alternate;
+        }
+
+        .alert-log-item.danger {
+            background: rgba(239, 68, 68, 0.07);
+            border: 1px solid rgba(239, 68, 68, 0.15);
+            border-left: 4px solid var(--danger);
+            color: #fca5a5;
+        }
+
+        .alert-log-item.warning {
+            background: rgba(245, 158, 11, 0.07);
+            border: 1px solid rgba(245, 158, 11, 0.15);
+            border-left: 4px solid var(--warning);
+            color: #fcd34d;
+        }
+
+        @keyframes pulse-alert-border {
+            0% { border-left-opacity: 0.6; }
+            100% { border-left-opacity: 1; box-shadow: 0 0 10px rgba(239, 68, 68, 0.05); }
+        }
+
+        .alert-log-icon {
+            font-size: 1.1rem;
+            margin-top: 1px;
+        }
+
+        .alert-log-content {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            flex-grow: 1;
+        }
+
+        .alert-log-message {
+            font-size: 0.85rem;
+            font-weight: 500;
+            line-height: 1.4;
+        }
+
+        .alert-log-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .alert-empty {
+            text-align: center;
+            padding: 2.5rem 1rem;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .alert-empty i {
+            font-size: 1.8rem;
+            color: rgba(16, 185, 129, 0.2);
+        }
+
+        .alert-empty p {
+            color: var(--text-muted);
+        }
+
+        /* Timeline Feed */
+        .timeline-feed {
+            max-height: 250px;
+            overflow-y: auto;
+            padding-right: 4px;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .timeline-item {
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            font-size: 0.8rem;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .timeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .timeline-topic {
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            padding: 1px 6px;
+            border-radius: 4px;
+        }
+
+        .timeline-topic.sensor { background-color: rgba(6, 182, 212, 0.1); color: var(--sensor-color); }
+        .timeline-topic.access { background-color: rgba(16, 185, 129, 0.1); color: var(--access-color); }
+        .timeline-topic.camera { background-color: rgba(168, 85, 247, 0.1); color: var(--camera-color); }
+        .timeline-topic.core-alert { background-color: rgba(244, 63, 94, 0.1); color: var(--alert-color); }
+
+        .timeline-time {
+            color: var(--text-muted);
+            font-size: 0.7rem;
+        }
+
+        .timeline-desc {
+            color: var(--text-secondary);
+            line-height: 1.35;
+        }
+
+        /* Charts Row Layouts */
+        .charts-top-row {
+            width: 100%;
+            margin-bottom: 1.5rem;
+        }
+
+        .charts-bottom-row {
+            display: grid;
+            grid-template-columns: repeat(1, minmax(0, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+
+        @media (min-width: 768px) {
+            .charts-bottom-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+        .chart-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            min-height: 340px;
+            transition: all var(--transition-speed);
+        }
+
+        .chart-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--card-hover-border);
+            box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.15);
+        }
+
+        .chart-subtitle {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: -0.25rem;
+            margin-bottom: 0.5rem;
+            line-height: 1.4;
+        }
+
+        .chart-container {
+            position: relative;
+            flex-grow: 1;
+            height: 250px;
+            width: 100%;
+        }
+
+        /* Table Row Interactive Hover */
+        .status-table tr:hover td {
+            background-color: rgba(255, 255, 255, 0.02);
+            color: #ffffff;
+            transition: all 0.2s ease;
+        }
+
+        /* Toast Container */
+        #toast-container {
+            position: fixed;
+            top: 1.5rem;
+            right: 1.5rem;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            max-width: 380px;
+            width: calc(100% - 3rem);
+        }
+
+        .toast {
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 0 20px rgba(239, 68, 68, 0.15);
+            backdrop-filter: blur(16px);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            display: flex;
+            gap: 0.75rem;
+            color: #ffffff;
+            animation: slide-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            position: relative;
+            overflow: hidden;
+            border-left: 5px solid var(--danger);
+        }
+
+        .toast.warning {
+            border-left-color: var(--warning);
+            border-color: rgba(245, 158, 11, 0.2);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 0 20px rgba(245, 158, 11, 0.15);
+        }
+
+        .toast.success {
+            border-left-color: var(--success);
+            border-color: rgba(16, 185, 129, 0.2);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 0 20px rgba(16, 185, 129, 0.15);
+        }
+        .toast.success .toast-icon {
+            color: var(--success);
+        }
+
+        .check-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-secondary);
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.72rem;
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            transition: all var(--transition-speed);
+        }
+        .check-btn:hover:not(:disabled) {
+            background: rgba(99, 102, 241, 0.15);
+            border-color: var(--card-hover-border);
+            color: #ffffff;
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.2);
+        }
+        .check-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            background: rgba(255, 255, 255, 0.02);
+            border-color: rgba(255, 255, 255, 0.04);
+        }
+
+        @keyframes slide-in {
+            from { transform: translateX(100%) scale(0.9); opacity: 0; }
+            to { transform: translateX(0) scale(1); opacity: 1; }
+        }
+
+        .toast.fade-out {
+            animation: fade-out 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes fade-out {
+            to { transform: translateX(50%) scale(0.95); opacity: 0; filter: blur(4px); }
+        }
+
+        .toast-icon {
+            font-size: 1.25rem;
+            align-self: center;
+        }
+        .toast.danger .toast-icon { color: var(--danger); }
+        .toast.warning .toast-icon { color: var(--warning); }
+
+        .toast-content {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            flex-grow: 1;
+        }
+
+        .toast-title {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .toast-desc {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.35;
+        }
+
+        .toast-close {
+            color: var(--text-muted);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 0.85rem;
+            padding: 2px;
+            align-self: flex-start;
+            transition: color var(--transition-speed);
+        }
+
+        .toast-close:hover {
+            color: #ffffff;
+        }
+
+        .toast-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            background-color: var(--danger);
+            width: 100%;
+        }
+        .toast.warning .toast-progress {
+            background-color: var(--warning);
+        }
+    </style>
+</head>
+<body>
+    <div id="toast-container"></div>
+    <div class="container">
+        <!-- Top Header -->
+        <header>
+            <div class="header-title-area">
+                <div class="header-icon">
+                    <i class="fa-solid fa-tower-broadcast"></i>
+                </div>
+                <div class="header-title-text">
+                    <h1>Smart Campus Operations</h1>
+                    <p>Dịch vụ Phân tích & Tổng hợp Dữ liệu — Nhóm A5 Analytics</p>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 5px; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-circle-info" style="color: var(--primary);"></i>
+                        <span>Truy cập mạng nội bộ LAN bằng URL máy chủ: <strong>http://&lt;IP_MÁY_CHỦ&gt;:8005/</strong> (Gõ <code>ipconfig</code> trên máy chủ để lấy IP).</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="header-status-area">
+                <!-- Readiness Status Banner -->
+                <div id="readiness-banner" class="status-banner waiting">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                    <span>Đang tải thông tin kết nối...</span>
+                </div>
+                
+                <!-- MQTT Status Connection Badge -->
+                <div id="mqtt-badge" class="mqtt-badge disconnected">
+                    <span class="dot"></span>
+                    <span>Broker: Offline</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- KPI Grid Row -->
+        <section class="kpi-grid">
+            <div class="kpi-card sensor">
+                <div class="kpi-info">
+                    <h3>Sự kiện Cảm biến</h3>
+                    <div id="val-sensor" class="kpi-value">0</div>
+                </div>
+                <div class="kpi-icon-wrapper">
+                    <i class="fa-solid fa-microchip"></i>
+                </div>
+            </div>
+            
+            <div class="kpi-card access">
+                <div class="kpi-info">
+                    <h3>Lượt Ra vào Cửa</h3>
+                    <div id="val-access" class="kpi-value">0</div>
+                </div>
+                <div class="kpi-icon-wrapper">
+                    <i class="fa-solid fa-id-card"></i>
+                </div>
+            </div>
+            
+            <div class="kpi-card camera">
+                <div class="kpi-info">
+                    <h3>Phát hiện Camera</h3>
+                    <div id="val-camera" class="kpi-value">0</div>
+                </div>
+                <div class="kpi-icon-wrapper">
+                    <i class="fa-solid fa-video"></i>
+                </div>
+            </div>
+            
+            <div class="kpi-card alerts">
+                <div class="kpi-info">
+                    <h3>Tổng số Cảnh báo</h3>
+                    <div id="val-alerts" class="kpi-value">0</div>
+                </div>
+                <div class="kpi-icon-wrapper">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2 Columns Dashboard Body -->
+        <section class="dashboard-body">
+            <!-- Left Pane: Source Readiness + AI insights -->
+            <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <!-- Table of Sources -->
+                <div class="panel-card">
+                    <div class="panel-header">
+                        <h2 class="panel-title"><i class="fa-solid fa-circle-nodes"></i> Trạng thái Kết nối các Dịch vụ Đối tác</h2>
+                    </div>
+                    <div class="status-table-wrapper">
+                        <table class="status-table">
+                            <thead>
+                                <tr>
+                                    <th>Nguồn dữ liệu</th>
+                                    <th>Trạng thái</th>
+                                    <th>Số lượng Event</th>
+                                    <th>Cập nhật gần nhất</th>
+                                    <th style="text-align: center;">Hành động</th>
+                                </tr>
+                            </thead>
+                            <tbody id="source-table-body">
+                                <tr>
+                                    <td class="source-name"><i class="fa-solid fa-microchip" style="color:var(--sensor-color)"></i> IoT Sensor (A1)</td>
+                                    <td><span class="status-pill offline">Offline</span></td>
+                                    <td>0</td>
+                                    <td>Chưa có dữ liệu</td>
+                                </tr>
+                                <tr>
+                                    <td class="source-name"><i class="fa-solid fa-id-card" style="color:var(--access-color)"></i> Access Gate (A3)</td>
+                                    <td><span class="status-pill offline">Offline</span></td>
+                                    <td>0</td>
+                                    <td>Chưa có dữ liệu</td>
+                                </tr>
+                                <tr>
+                                    <td class="source-name"><i class="fa-solid fa-video" style="color:var(--camera-color)"></i> Camera AI (A2/A4)</td>
+                                    <td><span class="status-pill offline">Offline</span></td>
+                                    <td>0</td>
+                                    <td>Chưa có dữ liệu</td>
+                                </tr>
+                                <tr>
+                                    <td class="source-name"><i class="fa-solid fa-shield-halved" style="color:var(--alert-color)"></i> Core Alert (A6)</td>
+                                    <td><span class="status-pill offline">Offline</span></td>
+                                    <td>0</td>
+                                    <td>Chưa có dữ liệu</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Automated Insights -->
+                <div class="panel-card">
+                    <div class="panel-header">
+                        <h2 class="panel-title"><i class="fa-solid fa-brain"></i> Nhận xét & Phân tích Dữ liệu Tự động</h2>
+                    </div>
+                    <div id="insights-container" class="insights-list">
+                        <div class="insight-item">
+                            <i class="fa-solid fa-info-circle" style="color: var(--primary); margin-top: 2px;"></i>
+                            <div>Đang đợi kết nối đầy đủ các bên để đưa ra nhận xét tự động về dữ liệu môi trường và an ninh...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Pane: Real-time warnings log + Activity Timeline -->
+            <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <!-- Threshold warnings -->
+                <div class="panel-card" style="border-color: rgba(239, 68, 68, 0.15)">
+                    <div class="panel-header" style="border-bottom-color: rgba(239, 68, 68, 0.1)">
+                        <h2 class="panel-title" style="color: #fca5a5"><i class="fa-solid fa-radiation" style="color: var(--danger)"></i> Cảnh báo Vượt ngưỡng IoT / Camera</h2>
+                    </div>
+                    <div id="alerts-hub" class="alert-hub">
+                        <div class="alert-empty">
+                            <i class="fa-solid fa-circle-check"></i>
+                            <p>Không có cảnh báo vượt ngưỡng</p>
+                            <span style="font-size:0.75rem; color:var(--text-muted)">Các ngưỡng cảm biến & camera đều trong mức an toàn</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Activities -->
+                <div class="panel-card">
+                    <div class="panel-header">
+                        <h2 class="panel-title"><i class="fa-solid fa-clock-rotate-left"></i> Luồng Sự kiện Rút gọn (Gần nhất)</h2>
+                    </div>
+                    <div id="timeline-feed" class="timeline-feed">
+                        <div class="alert-empty">
+                            <i class="fa-solid fa-inbox" style="color:rgba(255,255,255,0.05)"></i>
+                            <p>Đang chờ sự kiện mới...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Charts Layout Sections -->
+        <!-- 1. Climate chart (Full Width) -->
+        <section class="charts-top-row">
+            <div class="chart-card">
+                <h3 class="panel-title"><i class="fa-solid fa-temperature-half"></i> Khí hậu theo Phòng (Nhiệt độ & Độ ẩm)</h3>
+                <p class="chart-subtitle">Biểu đồ giám sát nhiệt độ (°C) và độ ẩm (%) trung bình đo được từ các phòng thực tế. Giúp ban quản trị kiểm soát chất lượng môi trường.</p>
+                <div class="chart-container" style="height: 280px;">
+                    <canvas id="chart-climate"></canvas>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 2. Doughnut charts (Two Columns) -->
+        <section class="charts-bottom-row">
+            <!-- Event Share -->
+            <div class="chart-card">
+                <h3 class="panel-title"><i class="fa-solid fa-chart-pie"></i> Cơ cấu Dữ liệu Nhận được</h3>
+                <p class="chart-subtitle">Tỷ lệ đóng góp dữ liệu từ các dịch vụ thành viên (IoT, Cổng ra vào, Camera AI, Cảnh báo hệ thống) gửi về Analytics Hub.</p>
+                <div class="chart-container">
+                    <canvas id="chart-events"></canvas>
+                </div>
+            </div>
+
+            <!-- Access Gate Ratio -->
+            <div class="chart-card">
+                <h3 class="panel-title"><i class="fa-solid fa-door-open"></i> Tỉ lệ Xác thực Ra vào Cửa</h3>
+                <p class="chart-subtitle">Thống kê tỷ lệ lượt quẹt thẻ được phê duyệt truy cập (Granted) so với các lượt thẻ không hợp lệ bị từ chối (Denied).</p>
+                <div class="chart-container">
+                    <canvas id="chart-access"></canvas>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Web Audio Alert sound capability -->
+    <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playWarningBeep() {
+            try {
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
+                gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.3);
+            } catch (e) {
+                console.log("Audio failed to play", e);
+            }
+        }
+    </script>
+
+    <!-- JS Logic -->
+    <script>
+        // Track displayed alerts to avoid duplicate toasts
+        const displayedAlerts = new Set();
+        let firstLoad = true;
+
+        // Custom Contrast Color Palette (resolving CSS var mapping issues in Chart.js)
+        const COLORS = {
+            textPrimary: '#f8fafc',
+            textSecondary: '#94a3b8',
+            textMuted: '#64748b',
+            primary: '#6366f1',
+            success: '#10b981',
+            warning: '#f59e0b',
+            danger: '#ef4444',
+            sensor: '#06b6d4',
+            camera: '#a855f7',
+            alert: '#f43f5e',
+            grid: 'rgba(255, 255, 255, 0.06)'
+        };
+
+        // Charts
+        let climateChart = null;
+        let eventsChart = null;
+        let accessChart = null;
+
+        // Register datalabels plugin globally
+        Chart.register(ChartDataLabels);
+
+        // Set Chart.js global defaults for all text elements to prevent unreadable black text
+        Chart.defaults.color = COLORS.textPrimary;
+        Chart.defaults.font.family = 'Inter';
+        Chart.defaults.plugins.legend.labels.color = COLORS.textPrimary;
+
+        // Custom plugin to draw dual-line text in the center of doughnut charts
+        const centerTextPlugin = {
+            id: 'centerText',
+            beforeDraw: function(chart) {
+                const centerConfig = chart.config.options.plugins.centerText;
+                if (centerConfig && centerConfig.display !== false) {
+                    const ctx = chart.ctx;
+                    const fontStyle = centerConfig.fontStyle || 'Outfit';
+                    const line1 = centerConfig.line1 || '';
+                    const line2 = centerConfig.line2 || '';
+                    const color1 = centerConfig.color1 || COLORS.textSecondary;
+                    const color2 = centerConfig.color2 || '#ffffff';
+                    
+                    ctx.save();
+                    const centerX = ((chart.chartArea.left + chart.chartArea.right) / 2);
+                    const centerY = ((chart.chartArea.top + chart.chartArea.bottom) / 2);
+                    
+                    // Draw Line 1 (Subtext/Label)
+                    ctx.font = "600 10px " + fontStyle;
+                    ctx.fillStyle = color1;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(line1.toUpperCase(), centerX, centerY - 9);
+                    
+                    // Draw Line 2 (Large Value)
+                    ctx.font = "bold 18px " + fontStyle;
+                    ctx.fillStyle = color2;
+                    ctx.fillText(line2, centerX, centerY + 11);
+                    
+                    ctx.restore();
+                }
+            }
+        };
+        Chart.register(centerTextPlugin);
+
+        // Helper to format ISO time to friendly HH:MM:SS
+        function formatTime(isoStr) {
+            if (!isoStr) return "Never";
+            try {
+                const date = new Date(isoStr);
+                return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            } catch(e) {
+                return isoStr;
+            }
+        }
+
+        // Initialize Charts
+        function initCharts() {
+            // Chart 1: Climate Room (Smooth Line Chart with Area Gradient Fill)
+            const ctxClimate = document.getElementById('chart-climate').getContext('2d');
+            
+            // Create nice vertical gradient backgrounds
+            const tempGradient = ctxClimate.createLinearGradient(0, 0, 0, 240);
+            tempGradient.addColorStop(0, 'rgba(6, 182, 212, 0.25)');
+            tempGradient.addColorStop(1, 'rgba(6, 182, 212, 0.00)');
+
+            const humGradient = ctxClimate.createLinearGradient(0, 0, 0, 240);
+            humGradient.addColorStop(0, 'rgba(99, 102, 241, 0.18)');
+            humGradient.addColorStop(1, 'rgba(99, 102, 241, 0.00)');
+
+            climateChart = new Chart(ctxClimate, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Nhiệt độ (°C)',
+                            data: [],
+                            borderColor: COLORS.sensor,
+                            backgroundColor: tempGradient,
+                            borderWidth: 4,
+                            pointBackgroundColor: COLORS.sensor,
+                            pointBorderColor: '#0b0f19',
+                            pointBorderWidth: 2,
+                            pointRadius: (context) => context.chart.data.labels.length <= 2 ? 7 : 5,
+                            pointHoverRadius: 9,
+                            tension: 0.35,
+                            cubicInterpolationMode: 'monotone',
+                            spanGaps: true,
+                            fill: true,
+                            yAxisID: 'yTemp'
+                        },
+                        {
+                            label: 'Độ ẩm (%)',
+                            data: [],
+                            borderColor: COLORS.primary,
+                            backgroundColor: humGradient,
+                            borderWidth: 4,
+                            pointBackgroundColor: COLORS.primary,
+                            pointBorderColor: '#0b0f19',
+                            pointBorderWidth: 2,
+                            pointRadius: (context) => context.chart.data.labels.length <= 2 ? 7 : 5,
+                            pointHoverRadius: 9,
+                            tension: 0.35,
+                            cubicInterpolationMode: 'monotone',
+                            spanGaps: true,
+                            fill: true,
+                            yAxisID: 'yHum'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: COLORS.grid },
+                            ticks: { color: COLORS.textSecondary, font: { family: 'Inter', size: 11 } }
+                        },
+                        yTemp: {
+                            type: 'linear',
+                            position: 'left',
+                            grid: { color: COLORS.grid },
+                            ticks: { color: COLORS.sensor, font: { family: 'Inter', size: 11 } },
+                            min: 0,
+                            max: 60,
+                            title: { display: true, text: 'Nhiệt độ (°C)', color: COLORS.sensor, font: { family: 'Outfit', weight: 'bold' } }
+                        },
+                        yHum: {
+                            type: 'linear',
+                            position: 'right',
+                            grid: { display: false },
+                            ticks: { color: COLORS.primary, font: { family: 'Inter', size: 11 } },
+                            min: 0,
+                            max: 100,
+                            title: { display: true, text: 'Độ ẩm (%)', color: COLORS.primary, font: { family: 'Outfit', weight: 'bold' } }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: { color: COLORS.textPrimary, font: { family: 'Inter', size: 11, weight: '500' } }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            titleColor: COLORS.textPrimary,
+                            bodyColor: COLORS.textSecondary,
+                            borderColor: 'rgba(255, 255, 255, 0.08)',
+                            borderWidth: 1,
+                            cornerRadius: 8,
+                            padding: 10,
+                            usePointStyle: true,
+                            titleFont: { family: 'Outfit', size: 12, weight: 'bold' },
+                            bodyFont: { family: 'Inter', size: 12 }
+                        },
+                        datalabels: {
+                            display: 'auto',
+                            anchor: (context) => context.datasetIndex === 0 ? 'end' : 'start',
+                            align: (context) => context.datasetIndex === 0 ? 'top' : 'bottom',
+                            offset: 3,
+                            color: (context) => context.datasetIndex === 0 ? '#22d3ee' : '#c7d2fe',
+                            font: { weight: 'bold', size: 10, family: 'Inter' },
+                            formatter: (value, context) => {
+                                if (value === 0 || value === null) return '';
+                                const label = context.dataset.label;
+                                if (label.includes('Nhiệt độ')) return value.toFixed(1) + '°C';
+                                if (label.includes('Độ ẩm')) return value.toFixed(0) + '%';
+                                return value;
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Chart 2: Events share (Doughnut)
+            const ctxEvents = document.getElementById('chart-events').getContext('2d');
+            eventsChart = new Chart(ctxEvents, {
+                type: 'doughnut',
+                data: {
+                    labels: ['IoT Sensor', 'Access Gate', 'Camera AI', 'Core Alert'],
+                    datasets: [{
+                        data: [0, 0, 0, 0],
+                        backgroundColor: [
+                            'rgba(6, 182, 212, 0.8)',
+                            'rgba(16, 185, 129, 0.8)',
+                            'rgba(168, 85, 247, 0.8)',
+                            'rgba(244, 63, 94, 0.8)'
+                        ],
+                        borderColor: '#0f172a',
+                        borderWidth: 2,
+                        hoverOffset: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: COLORS.textPrimary,
+                                font: { family: 'Inter', size: 10, weight: '500' },
+                                padding: 12,
+                                generateLabels: function(chart) {
+                                    const data = chart.data;
+                                    if (data.labels.length && data.datasets.length) {
+                                        const dataset = data.datasets[0];
+                                        const total = dataset.data.reduce((a, b) => a + b, 0);
+                                        return data.labels.map(function(label, i) {
+                                            const value = dataset.data[i] || 0;
+                                            const pct = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
+                                            const pctStr = pct.endsWith('.0') ? parseFloat(pct).toFixed(0) : pct;
+                                            return {
+                                                text: label + ': ' + value.toLocaleString() + ' (' + pctStr + '%)',
+                                                fillStyle: dataset.backgroundColor[i],
+                                                strokeStyle: dataset.borderColor || '#0f172a',
+                                                lineWidth: dataset.borderWidth || 2,
+                                                hidden: chart.getDatasetMeta(0).data[i]?.hidden,
+                                                index: i,
+                                                fontColor: COLORS.textPrimary,
+                                                color: COLORS.textPrimary
+                                            };
+                                        });
+                                    }
+                                    return [];
+                                }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            titleColor: COLORS.textPrimary,
+                            bodyColor: COLORS.textSecondary,
+                            borderColor: 'rgba(255, 255, 255, 0.08)',
+                            borderWidth: 1,
+                            cornerRadius: 8,
+                            padding: 10
+                        },
+                        datalabels: {
+                            display: (context) => {
+                                const dataset = context.dataset;
+                                const value = dataset.data[context.dataIndex];
+                                const total = dataset.data.reduce((a, b) => a + b, 0);
+                                return (total > 0 && (value / total * 100) >= 5); // Hide if < 5% to avoid overlaps
+                            },
+                            color: '#ffffff',
+                            font: { weight: 'bold', size: 10, family: 'Inter' },
+                            formatter: (value, ctx) => {
+                                if (value <= 0) return '';
+                                const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                const pct = (value / total * 100).toFixed(0);
+                                return value.toLocaleString() + '\n(' + pct + '%)';
+                            },
+                            textAlign: 'center'
+                        },
+                        centerText: {
+                            display: true,
+                            line1: 'Tổng sự kiện',
+                            line2: '0',
+                            fontStyle: 'Outfit',
+                            color1: COLORS.textSecondary,
+                            color2: '#ffffff'
+                        }
+                    },
+                    cutout: '68%'
+                }
+            });
+
+            // Chart 3: Access control share (Doughnut)
+            const ctxAccess = document.getElementById('chart-access').getContext('2d');
+            accessChart = new Chart(ctxAccess, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Cho phép (Granted)', 'Từ chối (Denied)'],
+                    datasets: [{
+                        data: [0, 0],
+                        backgroundColor: [
+                            'rgba(16, 185, 129, 0.8)',
+                            'rgba(239, 68, 68, 0.8)'
+                        ],
+                        borderColor: '#0f172a',
+                        borderWidth: 2,
+                        hoverOffset: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: COLORS.textPrimary,
+                                font: { family: 'Inter', size: 10, weight: '500' },
+                                padding: 12,
+                                generateLabels: function(chart) {
+                                    const data = chart.data;
+                                    if (data.labels.length && data.datasets.length) {
+                                        const dataset = data.datasets[0];
+                                        const total = dataset.data.reduce((a, b) => a + b, 0);
+                                        return data.labels.map(function(label, i) {
+                                            const value = dataset.data[i] || 0;
+                                            const pct = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
+                                            const pctStr = pct.endsWith('.0') ? parseFloat(pct).toFixed(0) : pct;
+                                            return {
+                                                text: label + ': ' + value.toLocaleString() + ' (' + pctStr + '%)',
+                                                fillStyle: dataset.backgroundColor[i],
+                                                strokeStyle: dataset.borderColor || '#0f172a',
+                                                lineWidth: dataset.borderWidth || 2,
+                                                hidden: chart.getDatasetMeta(0).data[i]?.hidden,
+                                                index: i,
+                                                fontColor: COLORS.textPrimary,
+                                                color: COLORS.textPrimary
+                                            };
+                                        });
+                                    }
+                                    return [];
+                                }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            titleColor: COLORS.textPrimary,
+                            bodyColor: COLORS.textSecondary,
+                            borderColor: 'rgba(255, 255, 255, 0.08)',
+                            borderWidth: 1,
+                            cornerRadius: 8,
+                            padding: 10
+                        },
+                        datalabels: {
+                            display: (context) => {
+                                const dataset = context.dataset;
+                                const value = dataset.data[context.dataIndex];
+                                const total = dataset.data.reduce((a, b) => a + b, 0);
+                                return (total > 0 && (value / total * 100) >= 5); // Hide if < 5% to avoid overlaps
+                            },
+                            color: '#ffffff',
+                            font: { weight: 'bold', size: 10, family: 'Inter' },
+                            formatter: (value, context) => {
+                                if (value <= 0) return '';
+                                const total = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                const pct = (value / total * 100).toFixed(1);
+                                return value.toLocaleString() + '\n(' + pct + '%)';
+                            },
+                            textAlign: 'center'
+                        },
+                        centerText: {
+                            display: true,
+                            line1: 'Tỉ lệ hợp lệ',
+                            line2: '100%',
+                            fontStyle: 'Outfit',
+                            color1: COLORS.textSecondary,
+                            color2: COLORS.success
+                        }
+                    },
+                    cutout: '68%'
+                }
+            });
+        }
+
+        // Show Toast popup for new alerts
+        function showToast(alert) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${alert.severity}`;
+            
+            let icon = 'fa-triangle-exclamation';
+            let title = 'CẢNH BÁO';
+            
+            if (alert.severity === 'danger') {
+                icon = 'fa-radiation';
+                title = 'CẢNH BÁO NGUY HIỂM';
+            } else if (alert.severity === 'success') {
+                icon = 'fa-circle-check';
+                title = 'KẾT NỐI THÀNH CÔNG';
+            } else if (alert.severity === 'warning') {
+                icon = 'fa-triangle-exclamation';
+                title = 'CẢNH BÁO VƯỢT NGƯỠNG';
+            }
+            
+            toast.innerHTML = `
+                <div class="toast-icon"><i class="fa-solid ${icon}"></i></div>
+                <div class="toast-content">
+                    <div class="toast-title">${title}</div>
+                    <div class="toast-desc">${alert.message}</div>
+                </div>
+                <button class="toast-close" onclick="closeToast(this)"><i class="fa-solid fa-xmark"></i></button>
+                <div class="toast-progress"></div>
+            `;
+            
+            container.appendChild(toast);
+            playWarningBeep();
+
+            // Auto dismiss toast after 6s
+            const duration = 6000;
+            const progress = toast.querySelector('.toast-progress');
+            progress.style.transition = `width ${duration}ms linear`;
+            setTimeout(() => { progress.style.width = '0%'; }, 50);
+
+            setTimeout(() => {
+                dismissToast(toast);
+            }, duration);
+        }
+
+        function closeToast(btn) {
+            const toast = btn.closest('.toast');
+            dismissToast(toast);
+        }
+
+        function dismissToast(toast) {
+            if (!toast.classList.contains('fade-out')) {
+                toast.classList.add('fade-out');
+                setTimeout(() => {
+                    toast.remove();
+                }, 400);
+            }
+        }
+
+        // Set of active connection checks to prevent double submission
+        const activelyChecking = new Set();
+
+        async function checkConnection(serviceKey) {
+            if (activelyChecking.has(serviceKey)) return;
+            activelyChecking.add(serviceKey);
+            
+            const btn = document.getElementById(`btn-${serviceKey}`);
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Checking`;
+            }
+            
+            try {
+                const response = await fetch(`/api/v1/services/check/${serviceKey}`, {
+                    method: 'POST'
+                });
+                if (!response.ok) throw new Error("Check call failed");
+                const result = await response.json();
+                
+                if (result.online) {
+                    showToast({
+                        id: 'check-' + Date.now(),
+                        severity: 'success',
+                        message: `Dịch vụ đối tác [${serviceKey.toUpperCase()}] phản hồi thành công (HTTP 200 OK).`,
+                        timestamp: new Date().toISOString()
+                    });
+                    
+                    const pill = document.getElementById(`pill-${serviceKey}`);
+                    if (pill) {
+                        pill.className = 'status-pill online';
+                        pill.innerText = 'Online';
+                    }
+                } else {
+                    showToast({
+                        id: 'check-' + Date.now(),
+                        severity: 'danger',
+                        message: `Không thể kết nối tới dịch vụ đối tác [${serviceKey.toUpperCase()}]. Vui lòng kiểm tra lại container.`,
+                        timestamp: new Date().toISOString()
+                    });
+                    
+                    const pill = document.getElementById(`pill-${serviceKey}`);
+                    if (pill) {
+                        pill.className = 'status-pill offline';
+                        pill.innerText = 'Offline';
+                    }
+                }
+                
+                // Wait slightly and refresh dashboard data to update the counts and charts
+                setTimeout(updateDashboard, 200);
+                
+            } catch (err) {
+                console.error("Check failed:", err);
+                showToast({
+                    id: 'check-' + Date.now(),
+                    severity: 'danger',
+                    message: `Lỗi hệ thống khi kiểm tra dịch vụ ${serviceKey.toUpperCase()}`,
+                    timestamp: new Date().toISOString()
+                });
+            } finally {
+                activelyChecking.delete(serviceKey);
+            }
+        }
+
+        // Main Fetch and Render Logic
+        async function updateDashboard() {
+            try {
+                const response = await fetch('/api/v1/dashboard/data');
+                if (!response.ok) throw new Error('API request failed');
+                const data = await response.json();
+                
+                // 1. Render Top Header Readiness
+                const readinessBanner = document.getElementById('readiness-banner');
+                const topicStatus = data.topic_status;
+                const onlineCount = Object.values(topicStatus).filter(s => s.count > 0).length;
+                
+                if (onlineCount === 4) {
+                    readinessBanner.className = 'status-banner ready';
+                    readinessBanner.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>HỆ THỐNG LIÊN KẾT HOÀN TẤT (4/4 Online)</span>`;
+                } else {
+                    readinessBanner.className = 'status-banner waiting';
+                    readinessBanner.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <span>ĐANG CHỜ LIÊN KẾT (${onlineCount}/4 Online)</span>`;
+                }
+
+                // MQTT Badge
+                const mqttBadge = document.getElementById('mqtt-badge');
+                if (data.mqtt_status.connected) {
+                    mqttBadge.className = 'mqtt-badge connected';
+                    mqttBadge.innerHTML = `<span class="dot"></span> <span>Broker: Connected</span>`;
+                } else {
+                    mqttBadge.className = 'mqtt-badge disconnected';
+                    mqttBadge.innerHTML = `<span class="dot"></span> <span>Broker: Disconnected</span>`;
+                }
+
+                // 2. Render KPI Counters
+                document.getElementById('val-sensor').innerText = data.metrics.sensor_events.toLocaleString();
+                document.getElementById('val-access').innerText = data.metrics.access_events.toLocaleString();
+                document.getElementById('val-camera').innerText = data.metrics.camera_events.toLocaleString();
+                document.getElementById('val-alerts').innerText = data.alerts.length.toString();
+
+                // 3. Render Source Status Table
+                const tableBody = document.getElementById('source-table-body');
+                let tableHtml = '';
+                
+                const sourcesConfig = [
+                    { key: 'sensor', name: 'IoT Sensor (A1)', icon: 'fa-microchip', color: 'var(--sensor-color)' },
+                    { key: 'access', name: 'Access Gate (A3)', icon: 'fa-id-card', color: 'var(--access-color)' },
+                    { key: 'camera', name: 'Camera AI (A2/A4)', icon: 'fa-video', color: 'var(--camera-color)' },
+                    { key: 'core_alert', name: 'Core Alert (A6)', icon: 'fa-shield-halved', color: 'var(--alert-color)' }
+                ];
+
+                sourcesConfig.forEach(src => {
+                    const info = topicStatus[src.key];
+                    const isOnline = info.count > 0;
+                    const statusClass = isOnline ? 'online' : 'offline';
+                    const statusText = isOnline ? 'Online' : 'Offline';
+                    
+                    const isChecking = activelyChecking.has(src.key);
+                    const btnDisabledAttr = isChecking ? 'disabled' : '';
+                    const btnText = isChecking ? '<i class="fa-solid fa-spinner fa-spin"></i> Checking' : '<i class="fa-solid fa-square-poll-vertical"></i> Check';
+                    
+                    tableHtml += `
+                        <tr>
+                            <td class="source-name"><i class="fa-solid ${src.icon}" style="color:${src.color}"></i> ${src.name}</td>
+                            <td><span class="status-pill ${statusClass}" id="pill-${src.key}">${statusText}</span></td>
+                            <td>${info.count.toLocaleString()}</td>
+                            <td>${formatTime(info.last_seen)}</td>
+                            <td style="text-align: center;">
+                                <button class="check-btn" id="btn-${src.key}" onclick="checkConnection('${src.key}')" ${btnDisabledAttr}>
+                                    ${btnText}
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                tableBody.innerHTML = tableHtml;
+
+                // 4. Render AI Insights
+                const insightsContainer = document.getElementById('insights-container');
+                let insightsHtml = '';
+                if (data.insights && data.insights.length > 0) {
+                    data.insights.forEach(insight => {
+                        let iconClass = 'fa-circle-info';
+                        let iconColor = 'var(--primary)';
+                        
+                        if (insight.includes('🔥') || insight.includes('🚨') || insight.includes('⚠️')) {
+                            iconClass = 'fa-triangle-exclamation';
+                            iconColor = 'var(--danger)';
+                        } else if (insight.includes('🟢') || insight.includes('🌡️') || insight.includes('🍃') || insight.includes('⚡')) {
+                            iconClass = 'fa-circle-check';
+                            iconColor = 'var(--success)';
+                        }
+                        
+                        insightsHtml += `
+                            <div class="insight-item">
+                                <i class="fa-solid ${iconClass}" style="color: ${iconColor}; margin-top: 2px;"></i>
+                                <div>${insight.replace(/^[^\s]+\s/, '')}</div>
+                            </div>
+                        `;
+                    });
+                    insightsContainer.innerHTML = insightsHtml;
+                } else {
+                    insightsContainer.innerHTML = `
+                        <div class="insight-item">
+                            <i class="fa-solid fa-info-circle" style="color: var(--primary)"></i>
+                            <div>Đang thu thập dữ liệu để đưa ra nhận xét...</div>
+                        </div>
+                    `;
+                }
+
+                // 5. Render Threshold Warnings & Trigger Toasts
+                const alertsHub = document.getElementById('alerts-hub');
+                if (data.alerts && data.alerts.length > 0) {
+                    let alertsHtml = '';
+                    data.alerts.forEach((alert, idx) => {
+                        const icon = alert.severity === 'danger' ? 'fa-radiation' : 'fa-triangle-exclamation';
+                        alertsHtml += `
+                            <div class="alert-log-item ${alert.severity}">
+                                <div class="alert-log-icon"><i class="fa-solid ${icon}"></i></div>
+                                <div class="alert-log-content">
+                                    <div class="alert-log-message">${alert.message}</div>
+                                    <div class="alert-log-meta">
+                                        <span><i class="fa-solid fa-location-dot"></i> ${alert.location}</span>
+                                        <span>${formatTime(alert.timestamp)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+
+                        // Trigger Toast for new alerts
+                        if (!displayedAlerts.has(alert.id)) {
+                            displayedAlerts.add(alert.id);
+                            // Avoid showing massive toasts at first load
+                            if (!firstLoad) {
+                                showToast(alert);
+                            }
+                        }
+                    });
+                    alertsHub.innerHTML = alertsHtml;
+                } else {
+                    alertsHub.innerHTML = `
+                        <div class="alert-empty">
+                            <i class="fa-solid fa-circle-check"></i>
+                            <p>Không có cảnh báo vượt ngưỡng</p>
+                            <span style="font-size:0.75rem; color:var(--text-muted)">Các ngưỡng cảm biến & camera đều trong mức an toàn</span>
+                        </div>
+                    `;
+                }
+
+                // 6. Render Timeline Events
+                const timelineContainer = document.getElementById('timeline-feed');
+                if (data.recent_events && data.recent_events.length > 0) {
+                    let timelineHtml = '';
+                    data.recent_events.forEach(item => {
+                        let topicName = 'EVENT';
+                        let badgeClass = 'sensor';
+                        if (item.topic.includes('sensor')) { topicName = 'Sensor'; badgeClass = 'sensor'; }
+                        else if (item.topic.includes('access')) { topicName = 'Access'; badgeClass = 'access'; }
+                        else if (item.topic.includes('camera')) { topicName = 'Camera'; badgeClass = 'camera'; }
+                        else if (item.topic.includes('core-alert')) { topicName = 'Core Alert'; badgeClass = 'core-alert'; }
+                        
+                        timelineHtml += `
+                            <div class="timeline-item">
+                                <div class="timeline-header">
+                                    <span class="timeline-topic ${badgeClass}">${topicName}</span>
+                                    <span class="timeline-time">${formatTime(item.at)}</span>
+                                </div>
+                                <div class="timeline-desc">${item.message}</div>
+                            </div>
+                        `;
+                    });
+                    timelineContainer.innerHTML = timelineHtml;
+                } else {
+                    timelineContainer.innerHTML = `
+                        <div class="alert-empty">
+                            <i class="fa-solid fa-inbox" style="color:rgba(255,255,255,0.05)"></i>
+                            <p>Đang chờ sự kiện mới...</p>
+                        </div>
+                    `;
+                }
+
+                // 7. Update Charts Data
+                // Chart 1: Climate per room (filtering out empty/dummy rooms and 'Unknown' labels)
+                const rooms = Object.keys(data.avg_temperature_by_room).filter(room => {
+                    if (room === 'Unknown' || room === 'Unknown Area') return false;
+                    const temp = data.avg_temperature_by_room[room];
+                    const hum = data.avg_humidity_by_room[room];
+                    return (temp !== undefined && temp > 0) || (hum !== undefined && hum > 0);
+                });
+                
+                const climateRooms = rooms.length === 1 ? [rooms[0], rooms[0]] : rooms;
+                const climateLabels = rooms.length === 1 ? [rooms[0], ' '] : rooms;
+
+                climateChart.data.labels = climateLabels;
+                climateChart.data.datasets[0].data = climateRooms.map(r => data.avg_temperature_by_room[r] || 0);
+                climateChart.data.datasets[1].data = climateRooms.map(r => data.avg_humidity_by_room[r] || 0);
+                climateChart.update();
+
+                // Chart 2: Event shares
+                eventsChart.data.datasets[0].data = [
+                    data.metrics.sensor_events,
+                    data.metrics.access_events,
+                    data.metrics.camera_events,
+                    data.metrics.core_alerts
+                ];
+                const totalEvts = data.metrics.sensor_events + data.metrics.access_events + data.metrics.camera_events + data.metrics.core_alerts;
+                eventsChart.options.plugins.centerText.line1 = "Tổng sự kiện";
+                eventsChart.options.plugins.centerText.line2 = totalEvts.toLocaleString();
+                eventsChart.update();
+
+                // Chart 3: Access results
+                const granted = data.metrics.access_granted;
+                const denied = data.metrics.access_denied;
+                const totalAccess = granted + denied;
+                accessChart.data.datasets[0].data = [granted, denied];
+                
+                const successRate = totalAccess > 0 ? ((granted / totalAccess) * 100).toFixed(1) : '100.0';
+                accessChart.options.plugins.centerText.line1 = "Tỉ lệ hợp lệ";
+                accessChart.options.plugins.centerText.line2 = successRate + "%";
+                
+                if (parseFloat(successRate) >= 90) {
+                    accessChart.options.plugins.centerText.color2 = COLORS.success;
+                } else if (parseFloat(successRate) >= 80) {
+                    accessChart.options.plugins.centerText.color2 = COLORS.warning;
+                } else {
+                    accessChart.options.plugins.centerText.color2 = COLORS.danger;
+                }
+                accessChart.update();
+
+                if (firstLoad) firstLoad = false;
+
+            } catch (err) {
+                console.error("Dashboard update failed:", err);
+            }
+        }
+
+        // Initialize and schedule updates
+        window.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            updateDashboard();
+            setInterval(updateDashboard, 2000); // Poll every 2 seconds
+        });
+    </script>
+</body>
+</html>

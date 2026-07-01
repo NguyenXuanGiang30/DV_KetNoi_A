@@ -13,6 +13,8 @@ venv/
 
 # Docker
 docker-compose.override.yml
+analytics-data/
+admin-data/
 
 # IDE
 .vscode/
